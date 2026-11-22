@@ -72,6 +72,36 @@
       z-index: 11;
     }
 
+    /* Full Screen CRT Monitor Mode (Native Fullscreen & Viewport Fallback) */
+    .crt-bezel.crt-fullscreen-active,
+    .crt-bezel:fullscreen {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      width: 100vw;
+      height: 100vh;
+      max-width: none;
+      border-radius: 0;
+      border: none;
+      padding: 1rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: radial-gradient(circle at center, #23262b 0%, #0e0f12 100%);
+    }
+
+    .crt-bezel.crt-fullscreen-active #crtScreenWrap,
+    .crt-bezel:fullscreen #crtScreenWrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
+      width: auto;
+      height: 100%;
+      max-width: 100%;
+      aspect-ratio: 4 / 3;
+      margin: 0 auto;
+    }
+
     /* Superboard II Bare Fiberglass PCB Styling */
     .osi-pcb {
       background-color: var(--pcb-green);
@@ -200,6 +230,14 @@
         Audio: ON
       </button>
 
+      <!-- Full Screen Monitor Toggle -->
+      <button id="fullscreenBtn" title="Toggle Full Screen CRT Monitor (Alt+Enter)" class="px-2.5 py-1.5 rounded-lg bg-[#101215] border border-emerald-700/70 hover:border-emerald-500 text-xs text-emerald-300 font-medium transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4" />
+        </svg>
+        <span id="fullscreenBtnLabel">Full Screen</span>
+      </button>
+
       <!-- Hardware BREAK / Reset Button -->
       <button id="breakBtn" title="Trigger Hardware BREAK / Reset to D/C/W/M ?" class="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs font-bold tracking-wide shadow transition">
         BREAK
@@ -217,15 +255,21 @@
     <section class="xl:col-span-7 flex flex-col gap-4">
 
       <!-- 1979 Composite Video Monitor -->
-      <div class="crt-bezel rounded-2xl p-3 sm:p-5 border border-gray-700/60">
+      <div id="crtBezel" class="crt-bezel rounded-2xl p-3 sm:p-5 border border-gray-700/60">
         <div class="flex items-center justify-between mb-2 px-1">
           <div class="flex items-center gap-2">
             <span id="powerLed" class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]"></span>
             <span class="text-[11px] font-mono-code uppercase tracking-widest text-gray-400">Composite Video • $D000–$D3FF</span>
           </div>
-          <div class="flex items-center gap-3 text-[11px] font-mono-code text-gray-400">
+          <div class="flex items-center gap-2.5 text-[11px] font-mono-code text-gray-400">
             <span id="modeIndicator" class="text-emerald-400 font-semibold">MODE: BOOT PROMPT</span>
             <span id="kbdFocusHint" class="hidden sm:inline text-gray-500">Click screen or type keys</span>
+            <button id="bezelFullscreenBtn" type="button" title="Toggle Full Screen CRT Monitor (Alt+Enter)" class="px-2 py-0.5 rounded bg-gray-800/90 hover:bg-gray-700 border border-gray-600/70 text-[10px] text-emerald-300 font-semibold transition flex items-center gap-1">
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4" />
+              </svg>
+              <span id="bezelFullscreenLabel">Full Screen</span>
+            </button>
           </div>
         </div>
 
@@ -246,6 +290,9 @@
             </button>
             <button data-boot="M" class="quick-boot-btn px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-600/70 text-[11px] font-mono-code text-amber-300 font-semibold transition">
               [M] 6502 Monitor
+            </button>
+            <button id="bezelBreakBtn" type="button" title="Hardware BREAK / Reset" class="hidden px-2.5 py-1 rounded bg-red-800/90 hover:bg-red-700 border border-red-600/70 text-[11px] font-mono-code text-white font-bold transition">
+              BREAK
             </button>
           </div>
           <div class="text-[11px] font-mono-code text-gray-400">
@@ -1313,7 +1360,7 @@ RTS</textarea>
           if (!line) return { bytes: [], newPc: pc };
         }
 
-        // Directives (.ORG, .BYTE, .ASCII)
+        // Directives (.ORG, .BYTE)
         const parts = line.match(/^([.\w]+)\s*(.*)$/);
         if (!parts) throw new Error(`Syntax error: ${rawLine}`);
         const mnem = parts[1].toUpperCase();
@@ -3329,52 +3376,64 @@ CALCADDR:
       cpu.reset();
 
       // DOM References
+      const crtBezel = document.getElementById("crtBezel");
       const crtCanvas = document.getElementById("crtCanvas");
       const crtCtx = crtCanvas.getContext("2d");
       const crtScreenWrap = document.getElementById("crtScreenWrap");
       const virtualKeyboard = document.getElementById("virtualKeyboard");
       const toastBanner = document.getElementById("toastBanner");
+      const fullscreenBtn = document.getElementById("fullscreenBtn");
+      const fullscreenBtnLabel = document.getElementById("fullscreenBtnLabel");
+      const bezelFullscreenBtn = document.getElementById("bezelFullscreenBtn");
+      const bezelFullscreenLabel = document.getElementById("bezelFullscreenLabel");
+      const bezelBreakBtn = document.getElementById("bezelBreakBtn");
 
       let cpuPaused = false;
       let phosphorColor = "green";
       let scanlinesOn = true;
+      let isMonitorFullscreen = false;
       let memDumpStart = 0xD000;
       let frameCount = 0;
-
-      const PHOSPHOR_PALETTES = {
-        green: { fg: "#44ff88", glow: "rgba(68, 255, 136, 0.35)", bg: "#030a05" },
-        amber: { fg: "#ffb833", glow: "rgba(255, 184, 51, 0.35)", bg: "#0b0702" },
-        white: { fg: "#eef6ff", glow: "rgba(220, 238, 255, 0.28)", bg: "#07090c" }
-      };
-
-      // Non-blocking toast helper (never uses alert/confirm)
       let toastTimer = null;
+
+      // Inline Toast Notification Banner
       function showToast(msg) {
         toastBanner.textContent = msg;
         toastBanner.classList.remove("hidden");
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => toastBanner.classList.add("hidden"), 3400);
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toastBanner.classList.add("hidden");
+        }, 3200);
       }
 
-      // Pre-render 256 8x8 glyph sprites for crisp, zero-lag 60 FPS CRT drawing
-      const glyphCanvases = new Array(256);
+      // CRT Phosphor Color Palettes & Pre-rendered 256-Glyph Sprite Atlas
+      const PHOSPHOR_PALETTES = {
+        green: { fg: "#39ff14", glow: "rgba(57, 255, 20, 0.25)", bg: "#030b04" },
+        amber: { fg: "#ffb000", glow: "rgba(255, 176, 0, 0.25)", bg: "#0c0701" },
+        white: { fg: "#e8f1f5", glow: "rgba(232, 241, 245, 0.20)", bg: "#07090b" }
+      };
+
+      const glyphCanvas = document.createElement("canvas");
+      glyphCanvas.width = 128;
+      glyphCanvas.height = 128;
+      const glyphCtx = glyphCanvas.getContext("2d");
+
       function rebuildGlyphAtlas() {
-        const pal = PHOSPHOR_PALETTES[phosphorColor];
+        const pal = PHOSPHOR_PALETTES[phosphorColor] || PHOSPHOR_PALETTES.green;
+        glyphCtx.clearRect(0, 0, 128, 128);
+        glyphCtx.fillStyle = pal.fg;
         for (let code = 0; code < 256; code++) {
-          const gc = document.createElement("canvas");
-          gc.width = 8;
-          gc.height = 8;
-          const gctx = gc.getContext("2d");
-          gctx.fillStyle = pal.fg;
-          for (let r = 0; r < 8; r++) {
-            const rowBits = charROM[code * 8 + r];
-            for (let c = 0; c < 8; c++) {
-              if (rowBits & (0x80 >> c)) {
-                gctx.fillRect(c, r, 1, 1);
+          const gx = (code % 16) * 8;
+          const gy = Math.floor(code / 16) * 8;
+          for (let row = 0; row < 8; row++) {
+            const bits = charROM[code * 8 + row];
+            if (!bits) continue;
+            for (let col = 0; col < 8; col++) {
+              if (bits & (0x80 >> col)) {
+                glyphCtx.fillRect(gx + col, gy + row, 1, 1);
               }
             }
           }
-          glyphCanvases[code] = gc;
         }
       }
       rebuildGlyphAtlas();
@@ -3383,268 +3442,386 @@ CALCADDR:
       function resizeCanvas() {
         const rect = crtScreenWrap.getBoundingClientRect();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        crtCanvas.width = Math.max(320, Math.floor(rect.width * dpr));
-        crtCanvas.height = Math.max(240, Math.floor(rect.height * dpr));
-        crtCtx.imageSmoothingEnabled = false;
-        hw.videoDirty = true;
+        const w = Math.max(320, Math.floor(rect.width * dpr));
+        const h = Math.max(240, Math.floor(rect.height * dpr));
+        if (crtCanvas.width !== w || crtCanvas.height !== h) {
+          crtCanvas.width = w;
+          crtCanvas.height = h;
+          hw.videoDirty = true;
+        }
       }
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
 
-      // Render 1KB Video RAM ($D000-$D3FF) to CRT Canvas
+      // Composite CRT Renderer ($D000-$D3FF Video RAM -> Canvas)
       function renderCRT() {
-        const pal = PHOSPHOR_PALETTES[phosphorColor];
         const w = crtCanvas.width;
         const h = crtCanvas.height;
+        if (w === 0 || h === 0) return;
 
+        const pal = PHOSPHOR_PALETTES[phosphorColor] || PHOSPHOR_PALETTES.green;
         crtCtx.fillStyle = pal.bg;
         crtCtx.fillRect(0, 0, w, h);
 
-        const isStock24 = hw.screenMode === "24x24";
-        const cols = isStock24 ? 24 : 32;
-        const rows = isStock24 ? 24 : 32;
-        const offX = isStock24 ? 4 : 0;
-        const offY = isStock24 ? 4 : 0;
+        const is24 = hw.screenMode === "24x24";
+        const cols = is24 ? 24 : 32;
+        const rows = is24 ? 24 : 32;
+        const offX = is24 ? 4 : 0;
+        const offY = is24 ? 4 : 0;
 
         const padX = Math.floor(w * 0.045);
-        const padY = Math.floor(h * 0.05);
-        const usableW = w - padX * 2;
-        const usableH = h - padY * 2;
-        const cellW = usableW / cols;
-        const cellH = usableH / rows;
+        const padY = Math.floor(h * 0.055);
+        const cellW = (w - padX * 2) / cols;
+        const cellH = (h - padY * 2) / rows;
 
         crtCtx.imageSmoothingEnabled = false;
-        crtCtx.shadowColor = pal.glow;
-        crtCtx.shadowBlur = 4;
 
         for (let y = 0; y < rows; y++) {
+          const vy = (offY + y) & 31;
           for (let x = 0; x < cols; x++) {
-            const vramOffset = ((offY + y) & 31) * 32 + ((offX + x) & 31);
-            const charCode = hw.mem[0xD000 + vramOffset];
-            if (charCode !== 0x20 && charCode !== 0x00) {
-              crtCtx.drawImage(
-                glyphCanvases[charCode],
-                Math.floor(padX + x * cellW),
-                Math.floor(padY + y * cellH),
-                Math.ceil(cellW),
-                Math.ceil(cellH)
-              );
-            }
-          }
-        }
-
-        // Draw blinking hardware/BASIC cursor
-        const blinkOn = Math.floor(frameCount / 22) % 2 === 0;
-        if (basic.active && !basic.running && blinkOn) {
-          const cx = basic.cursorX;
-          const cy = basic.cursorY;
-          if (cx >= 0 && cx < cols && cy >= 0 && cy < rows) {
-            crtCtx.fillStyle = pal.fg;
-            crtCtx.fillRect(
-              Math.floor(padX + cx * cellW),
-              Math.floor(padY + cy * cellH + cellH * 0.78),
+            const vx = (offX + x) & 31;
+            const code = hw.mem[0xD000 + vy * 32 + vx];
+            if (code === 0x20 || code === 0x00) continue;
+            const sx = (code % 16) * 8;
+            const sy = Math.floor(code / 16) * 8;
+            crtCtx.drawImage(
+              glyphCanvas,
+              sx, sy, 8, 8,
+              padX + x * cellW,
+              padY + y * cellH,
               Math.ceil(cellW),
-              Math.max(2, Math.ceil(cellH * 0.18))
+              Math.ceil(cellH)
             );
           }
         }
-        crtCtx.shadowBlur = 0;
-      }
 
-      // Build Interactive 53-Key Superboard II PCB Keyboard
-      const keyElements = new Map();
-      function buildVirtualKeyboard() {
-        virtualKeyboard.innerHTML = "";
-        for (const rowKeys of KEYBOARD_LAYOUT) {
-          const rowDiv = document.createElement("div");
-          rowDiv.className = "flex items-center justify-center gap-1 sm:gap-1.5";
-          for (const k of rowKeys) {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            const baseWidth = k.wide || "w-7 sm:w-9 md:w-10";
-            const styleClass =
-              k.style === "red" ? "osi-key-red" :
-              k.style === "dark" ? "osi-key-dark" : "osi-key-white";
-            btn.className = `osi-key ${styleClass} ${baseWidth} h-9 sm:h-10 rounded-md flex flex-col items-center justify-center leading-none px-1 relative font-mono-code`;
-
-            if (k.shift) {
-              btn.innerHTML = `
-                <span class="text-[9px] sm:text-[10px] opacity-75">${k.shift}</span>
-                <span class="text-[11px] sm:text-xs font-bold mt-0.5">${k.label}</span>
-              `;
-            } else {
-              const fontSize = k.label.length > 2 ? "text-[8px] sm:text-[9px]" : "text-[11px] sm:text-xs";
-              btn.innerHTML = `<span class="${fontSize} font-bold text-center">${k.label}</span>`;
+        // Draw Blinking CRT Block Cursor in interactive prompt states
+        const blinkOn = Math.floor(frameCount / 22) % 2 === 0;
+        if (blinkOn) {
+          let cx = -1;
+          let cy = -1;
+          if (basic.active && !basic.running) {
+            cx = basic.cursorX;
+            cy = basic.cursorY;
+          } else if (!basic.active && cpu.PC >= 0xF800) {
+            // Boot prompt ("D/C/W/M ?") sits at $D042..$D04A -> cursor at $D04C
+            if (hw.mem[0xD042] === 0x44 && hw.mem[0xD04A] === 0x3F) {
+              cx = 12 - offX;
+              cy = 2 - offY;
+            } else if (hw.mem[0xD021] === 0x36) {
+              // 6502 Monitor line at $D0A0..$D0A8 -> cursor at $D0A9
+              cx = 9 - offX;
+              cy = 5 - offY;
             }
-
-            if (k.latch) {
-              const led = document.createElement("span");
-              led.id = "shiftLockLed";
-              led.className = "w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444] absolute top-1 right-1";
-              btn.appendChild(led);
-            }
-
-            const pressDown = (e) => {
-              e.preventDefault();
-              audio.keyClick();
-              if (k.id === "BREAK") {
-                triggerBreakReset();
-                return;
-              }
-              if (k.id === "SHIFTLOCK") {
-                const locked = hw.toggleShiftLock();
-                const led = document.getElementById("shiftLockLed");
-                if (led) {
-                  led.className = locked
-                    ? "w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444] absolute top-1 right-1"
-                    : "w-1.5 h-1.5 rounded-full bg-gray-600 absolute top-1 right-1";
-                }
-                return;
-              }
-              btn.classList.add("pressed");
-              hw.setKeyMatrixState(k.row, k.col, true);
-              const ascii = resolveKeyToAscii(k);
-              if (ascii !== null) hw.enqueueAscii(ascii);
-            };
-
-            const releaseUp = (e) => {
-              e.preventDefault();
-              btn.classList.remove("pressed");
-              if (!k.latch) {
-                hw.setKeyMatrixState(k.row, k.col, false);
-              }
-            };
-
-            btn.addEventListener("mousedown", pressDown);
-            btn.addEventListener("mouseup", releaseUp);
-            btn.addEventListener("mouseleave", releaseUp);
-            btn.addEventListener("touchstart", pressDown, { passive: false });
-            btn.addEventListener("touchend", releaseUp, { passive: false });
-
-            rowDiv.appendChild(btn);
-            keyElements.set(k.id, { def: k, el: btn });
           }
-          virtualKeyboard.appendChild(rowDiv);
+
+          if (cx >= 0 && cx < cols && cy >= 0 && cy < rows) {
+            crtCtx.fillStyle = pal.fg;
+            crtCtx.globalAlpha = 0.78;
+            crtCtx.fillRect(
+              padX + cx * cellW,
+              padY + cy * cellH,
+              Math.ceil(cellW),
+              Math.ceil(cellH)
+            );
+            crtCtx.globalAlpha = 1.0;
+          }
         }
+
+        hw.videoDirty = false;
       }
 
-      function isShiftActive() {
-        return hw.shiftLock || (hw.matrix[6] & 0x03) !== 0;
+      // Build Interactive 53-Key Superboard II PCB Matrix Keyboard
+      const keyElementsById = new Map();
+      let physicalShiftDown = false;
+      let physicalCtrlDown = false;
+
+      function resolveKeyAscii(keyDef) {
+        if (keyDef.id === "RETURN") return 0x0D;
+        if (keyDef.id === "RUBOUT") return 0x08;
+        if (keyDef.id === "SPACE") return 0x20;
+        if (keyDef.id === "ESC") return 0x1B;
+        if (keyDef.id === "LF") return 0x0A;
+        if (keyDef.id === "UP") return 0x0B;
+        if (keyDef.id === "DOWN") return 0x0A;
+        if (keyDef.id === "LEFT") return 0x08;
+        if (keyDef.id === "RIGHT") return 0x09;
+
+        const isAlpha = /^[A-Z]$/.test(keyDef.id);
+        if (isAlpha) {
+          if (physicalCtrlDown) {
+            return keyDef.id.charCodeAt(0) - 64; // Ctrl+C -> 0x03, etc.
+          }
+          const upper = hw.shiftLock || physicalShiftDown;
+          return upper ? keyDef.id.charCodeAt(0) : keyDef.id.toLowerCase().charCodeAt(0);
+        }
+
+        if (keyDef.shift && physicalShiftDown) {
+          return keyDef.shift.charCodeAt(0);
+        }
+        if (keyDef.label.length === 1) {
+          return keyDef.label.charCodeAt(0);
+        }
+        return 0;
       }
 
-      function isCtrlActive() {
-        return (hw.matrix[6] & 0x08) !== 0;
-      }
-
-      function resolveKeyToAscii(k) {
-        if (k.id === "RETURN") return 0x0D;
-        if (k.id === "SPACE") return 0x20;
-        if (k.id === "RUBOUT") return 0x08;
-        if (k.id === "ESC") return 0x1B;
-        if (k.id === "LF") return 0x0A;
-        if (["LSHIFT", "RSHIFT", "CTRL", "REPEAT", "UP", "DOWN", "LEFT", "RIGHT"].includes(k.id)) {
-          return null;
-        }
-        if (k.label.length === 1) {
-          const ch = k.label;
-          if (isCtrlActive() && ch >= "A" && ch <= "Z") {
-            return ch.charCodeAt(0) - 64; // Ctrl+C = 3, etc.
-          }
-          if (ch >= "A" && ch <= "Z") {
-            return isShiftActive() ? ch.charCodeAt(0) : ch.toLowerCase().charCodeAt(0);
-          }
-          if (k.shift && (hw.matrix[6] & 0x03) !== 0) {
-            return k.shift.charCodeAt(0);
-          }
-          return ch.charCodeAt(0);
-        }
-        return null;
-      }
-
-      buildVirtualKeyboard();
-
-      // Physical Keyboard Mapping (when not typing into right-panel inputs)
-      const KEY_CODE_TO_OSI = {
-        Digit1: "1", Digit2: "2", Digit3: "3", Digit4: "4", Digit5: "5",
-        Digit6: "6", Digit7: "7", Digit8: "8", Digit9: "9", Digit0: "0",
-        Semicolon: ";", Minus: "-", Equal: "-", Quote: ":",
-        Backspace: "RUBOUT", Delete: "RUBOUT", Escape: "ESC", Enter: "RETURN",
-        Space: "SPACE", ShiftLeft: "LSHIFT", ShiftRight: "RSHIFT",
-        ControlLeft: "CTRL", ControlRight: "CTRL",
-        ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT",
-        Comma: ",", Period: ".", Slash: "/",
-        KeyA: "A", KeyB: "B", KeyC: "C", KeyD: "D", KeyE: "E", KeyF: "F",
-        KeyG: "G", KeyH: "H", KeyI: "I", KeyJ: "J", KeyK: "K", KeyL: "L",
-        KeyM: "M", KeyN: "N", KeyO: "O", KeyP: "P", KeyQ: "Q", KeyR: "R",
-        KeyS: "S", KeyT: "T", KeyU: "U", KeyV: "V", KeyW: "W", KeyX: "X",
-        KeyY: "Y", KeyZ: "Z"
-      };
-
-      window.addEventListener("keydown", (e) => {
-        const tag = document.activeElement ? document.activeElement.tagName : "";
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-
-        if (e.code === "CapsLock") {
-          const locked = hw.toggleShiftLock();
-          const led = document.getElementById("shiftLockLed");
-          if (led) {
-            led.className = locked
-              ? "w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444] absolute top-1 right-1"
-              : "w-1.5 h-1.5 rounded-full bg-gray-600 absolute top-1 right-1";
-          }
-          return;
-        }
-
-        const osiId = KEY_CODE_TO_OSI[e.code];
-        if (osiId && keyElements.has(osiId)) {
-          e.preventDefault();
-          const { def, el } = keyElements.get(osiId);
-          if (!e.repeat) {
-            audio.keyClick();
-            el.classList.add("pressed");
-            hw.setKeyMatrixState(def.row, def.col, true);
-          }
-          // Handle Ctrl+C break
-          if ((e.ctrlKey || isCtrlActive()) && e.code === "KeyC") {
-            basic.handleBreak();
-            return;
-          }
-          // Prefer exact typed printable character from e.key when applicable
-          if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-            let ch = e.key;
-            if (hw.shiftLock && !e.shiftKey && ch >= "a" && ch <= "z") {
-              ch = ch.toUpperCase();
-            }
-            hw.enqueueAscii(ch.charCodeAt(0));
-          } else {
-            const ascii = resolveKeyToAscii(def);
-            if (ascii !== null) hw.enqueueAscii(ascii);
-          }
-        }
-      });
-
-      window.addEventListener("keyup", (e) => {
-        const osiId = KEY_CODE_TO_OSI[e.code];
-        if (osiId && keyElements.has(osiId)) {
-          const { def, el } = keyElements.get(osiId);
-          el.classList.remove("pressed");
-          hw.setKeyMatrixState(def.row, def.col, false);
-        }
-      });
-
-      // Hardware BREAK / Reset
       function triggerBreakReset() {
+        audio.keyClick();
         basic.active = false;
         basic.running = false;
         hw.charQueue = [];
         hw.mem[0x00FF] = 0;
-        cpu.reset();
         cpuPaused = false;
         document.getElementById("cpuRunPauseBtn").textContent = "Pause CPU";
-        showToast("BREAK asserted — 6502 Reset to D/C/W/M ? prompt");
+        cpu.reset();
+        updateDebuggerUI();
+        showToast("Hardware BREAK: Reset to SYN600 Monitor (D/C/W/M ?)");
       }
 
+      function buildVirtualKeyboard() {
+        virtualKeyboard.innerHTML = "";
+        keyElementsById.clear();
+
+        KEYBOARD_LAYOUT.forEach((rowKeys) => {
+          const rowDiv = document.createElement("div");
+          rowDiv.className = "flex items-center justify-center gap-1 sm:gap-1.5 w-full";
+
+          rowKeys.forEach((keyDef) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            const styleClass =
+              keyDef.style === "red"
+                ? "osi-key-red"
+                : keyDef.style === "dark"
+                ? "osi-key-dark"
+                : "osi-key-white";
+            const widthClass = keyDef.wide || "flex-1 min-w-[22px] max-w-[44px]";
+            btn.className = `osi-key ${styleClass} ${widthClass} h-9 sm:h-10 rounded-md flex flex-col items-center justify-center px-1 font-mono-code text-[10px] sm:text-xs font-bold leading-none relative`;
+
+            if (keyDef.shift) {
+              btn.innerHTML = `<span class="text-[8px] sm:text-[9px] opacity-70 mb-0.5">${keyDef.shift}</span><span>${keyDef.label}</span>`;
+            } else if (keyDef.latch) {
+              btn.innerHTML = `<span class="text-[8px] sm:text-[9px] text-center leading-tight">${keyDef.label}</span><span id="shiftLockLed" class="w-1.5 h-1.5 rounded-full mt-0.5 ${
+                hw.shiftLock ? "bg-red-500 shadow-[0_0_6px_#ef4444]" : "bg-gray-600"
+              }"></span>`;
+            } else {
+              btn.innerHTML = `<span class="text-[9px] sm:text-[11px] text-center leading-tight">${keyDef.label}</span>`;
+            }
+
+            const pressKey = (e) => {
+              e.preventDefault();
+              if (keyDef.id === "BREAK") {
+                triggerBreakReset();
+                return;
+              }
+              if (keyDef.id === "SHIFTLOCK") {
+                const locked = hw.toggleShiftLock();
+                const led = document.getElementById("shiftLockLed");
+                if (led) {
+                  led.className = `w-1.5 h-1.5 rounded-full mt-0.5 ${
+                    locked ? "bg-red-500 shadow-[0_0_6px_#ef4444]" : "bg-gray-600"
+                  }`;
+                }
+                audio.keyClick();
+                return;
+              }
+
+              btn.classList.add("pressed");
+              hw.setKeyMatrixState(keyDef.row, keyDef.col, true);
+              audio.keyClick();
+
+              if (keyDef.id === "LSHIFT" || keyDef.id === "RSHIFT") {
+                physicalShiftDown = true;
+                return;
+              }
+              if (keyDef.id === "CTRL") {
+                physicalCtrlDown = true;
+                return;
+              }
+
+              const ascii = resolveKeyAscii(keyDef);
+              if (ascii > 0) {
+                hw.enqueueAscii(ascii);
+              }
+            };
+
+            const releaseKey = () => {
+              btn.classList.remove("pressed");
+              if (keyDef.id !== "SHIFTLOCK") {
+                hw.setKeyMatrixState(keyDef.row, keyDef.col, false);
+              }
+              if (keyDef.id === "LSHIFT" || keyDef.id === "RSHIFT") {
+                physicalShiftDown = false;
+              }
+              if (keyDef.id === "CTRL") {
+                physicalCtrlDown = false;
+              }
+            };
+
+            btn.addEventListener("pointerdown", pressKey);
+            btn.addEventListener("pointerup", releaseKey);
+            btn.addEventListener("pointerleave", releaseKey);
+            btn.addEventListener("pointercancel", releaseKey);
+
+            keyElementsById.set(keyDef.id, { btn, def: keyDef });
+            rowDiv.appendChild(btn);
+          });
+
+          virtualKeyboard.appendChild(rowDiv);
+        });
+      }
+      buildVirtualKeyboard();
+
+      // Physical Keyboard -> 8x8 Matrix & ASCII Queue Mapping
+      function mapPhysicalEventToKeyId(e) {
+        if (e.code.startsWith("Key")) return e.code.slice(3);
+        if (e.code.startsWith("Digit")) return e.code.slice(5);
+        switch (e.code) {
+          case "Enter":
+          case "NumpadEnter": return "RETURN";
+          case "Backspace":
+          case "Delete": return "RUBOUT";
+          case "Space": return "SPACE";
+          case "Escape": return "ESC";
+          case "ShiftLeft": return "LSHIFT";
+          case "ShiftRight": return "RSHIFT";
+          case "ControlLeft":
+          case "ControlRight": return "CTRL";
+          case "ArrowLeft": return "LEFT";
+          case "ArrowRight": return "RIGHT";
+          case "ArrowUp": return "UP";
+          case "ArrowDown": return "DOWN";
+          case "Minus": return "-";
+          case "Equal": return "-";
+          case "Semicolon": return ";";
+          case "Quote": return ":";
+          case "Comma": return ",";
+          case "Period": return ".";
+          case "Slash": return "/";
+          default: return null;
+        }
+      }
+
+      window.addEventListener("keydown", (e) => {
+        // Alt+Enter toggles Full Screen CRT Monitor Mode from anywhere
+        if (e.altKey && e.code === "Enter") {
+          e.preventDefault();
+          toggleMonitorFullscreen();
+          return;
+        }
+
+        const tag = document.activeElement ? document.activeElement.tagName : "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+        if (e.key === "Shift") physicalShiftDown = true;
+        if (e.key === "Control") physicalCtrlDown = true;
+
+        const keyId = mapPhysicalEventToKeyId(e);
+        if (keyId && keyElementsById.has(keyId)) {
+          e.preventDefault();
+          const { btn, def } = keyElementsById.get(keyId);
+          btn.classList.add("pressed");
+          hw.setKeyMatrixState(def.row, def.col, true);
+          if (!e.repeat) audio.keyClick();
+        }
+
+        if (e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta") {
+          return;
+        }
+
+        // Convert physical character into OSI ASCII stream
+        if (e.ctrlKey && e.key.length === 1 && /[a-z]/i.test(e.key)) {
+          e.preventDefault();
+          hw.enqueueAscii(e.key.toUpperCase().charCodeAt(0) - 64);
+          return;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          hw.enqueueAscii(0x0D);
+          return;
+        }
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          hw.enqueueAscii(0x08);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          hw.enqueueAscii(0x1B);
+          return;
+        }
+        if (e.key.length === 1) {
+          e.preventDefault();
+          let ch = e.key;
+          if (/^[a-z]$/.test(ch) && hw.shiftLock && !e.shiftKey) {
+            ch = ch.toUpperCase();
+          }
+          hw.enqueueAscii(ch.charCodeAt(0));
+        }
+      });
+
+      window.addEventListener("keyup", (e) => {
+        if (e.key === "Shift") physicalShiftDown = false;
+        if (e.key === "Control") physicalCtrlDown = false;
+
+        const keyId = mapPhysicalEventToKeyId(e);
+        if (keyId && keyElementsById.has(keyId)) {
+          const { btn, def } = keyElementsById.get(keyId);
+          btn.classList.remove("pressed");
+          if (def.id !== "SHIFTLOCK") {
+            hw.setKeyMatrixState(def.row, def.col, false);
+          }
+        }
+      });
+
       document.getElementById("breakBtn").addEventListener("click", triggerBreakReset);
+      bezelBreakBtn.addEventListener("click", triggerBreakReset);
+
+      // Full Screen Monitor Mode Controller (Native Fullscreen + Viewport Theater Fallback)
+      function syncFullscreenUI(active) {
+        isMonitorFullscreen = active;
+        crtBezel.classList.toggle("crt-fullscreen-active", active);
+        bezelBreakBtn.classList.toggle("hidden", !active);
+        const label = active ? "Exit Full Screen" : "Full Screen";
+        fullscreenBtnLabel.textContent = label;
+        bezelFullscreenLabel.textContent = label;
+        requestAnimationFrame(() => {
+          resizeCanvas();
+          crtScreenWrap.focus();
+        });
+      }
+
+      async function toggleMonitorFullscreen() {
+        if (!isMonitorFullscreen) {
+          syncFullscreenUI(true);
+          if (crtBezel.requestFullscreen && !document.fullscreenElement) {
+            try {
+              await crtBezel.requestFullscreen();
+            } catch (_) {
+              // Sandboxed iframe fallback: viewport theater mode remains active
+            }
+          }
+          showToast("Full Screen Monitor Mode enabled (Alt+Enter or button to exit)");
+        } else {
+          if (document.fullscreenElement) {
+            try {
+              await document.exitFullscreen();
+            } catch (_) {}
+          }
+          syncFullscreenUI(false);
+        }
+      }
+
+      fullscreenBtn.addEventListener("click", toggleMonitorFullscreen);
+      bezelFullscreenBtn.addEventListener("click", toggleMonitorFullscreen);
+
+      document.addEventListener("fullscreenchange", () => {
+        if (!document.fullscreenElement && isMonitorFullscreen) {
+          syncFullscreenUI(false);
+        } else if (document.fullscreenElement === crtBezel && !isMonitorFullscreen) {
+          syncFullscreenUI(true);
+        }
+      });
 
       // Quick Boot Shortcut Buttons ([C], [W], [M])
       document.querySelectorAll(".quick-boot-btn").forEach(btn => {
