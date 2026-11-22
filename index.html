@@ -1,0 +1,3988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ohio Scientific Superboard II (Model 600) Emulator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --pcb-green: #123c26;
+      --pcb-dark: #0b2618;
+      --pcb-trace: #1b5637;
+      --silkscreen: #e4eed9;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #101214;
+      color: #e5e7eb;
+      overflow-x: hidden;
+    }
+
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Authentic 1979 CRT Monitor Bezel & Scanline Effects */
+    .crt-bezel {
+      background: linear-gradient(145deg, #2b2d31, #191a1d);
+      box-shadow:
+        inset 0 2px 4px rgba(255, 255, 255, 0.08),
+        inset 0 -4px 10px rgba(0, 0, 0, 0.7),
+        0 18px 40px rgba(0, 0, 0, 0.65);
+    }
+
+    .crt-screen-wrap {
+      position: relative;
+      background: #040805;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow:
+        inset 0 0 36px rgba(0, 0, 0, 0.92),
+        0 0 0 3px #0c0d0f;
+    }
+
+    .crt-scanlines::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%,
+        rgba(0, 0, 0, 0.34) 50%
+      );
+      background-size: 100% 4px;
+      z-index: 10;
+    }
+
+    .crt-vignette::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(
+        circle at center,
+        transparent 62%,
+        rgba(0, 0, 0, 0.55) 100%
+      );
+      z-index: 11;
+    }
+
+    /* Superboard II Bare Fiberglass PCB Styling */
+    .osi-pcb {
+      background-color: var(--pcb-green);
+      background-image:
+        radial-gradient(var(--pcb-trace) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(27, 86, 55, 0.25) 1px, transparent 1px),
+        linear-gradient(rgba(27, 86, 55, 0.25) 1px, transparent 1px);
+      background-size: 16px 16px, 32px 32px, 32px 32px;
+      border: 2px solid #266b46;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 14px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Tactile 1979 Cherry/OSI Keycaps */
+    .osi-key {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      transition: transform 0.04s ease, box-shadow 0.04s ease, background-color 0.08s ease;
+      box-shadow:
+        0 3px 0 #1f2226,
+        0 4px 6px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    }
+
+    .osi-key:active,
+    .osi-key.pressed {
+      transform: translateY(2px);
+      box-shadow:
+        0 1px 0 #1f2226,
+        0 1px 2px rgba(0, 0, 0, 0.6),
+        inset 0 1px 2px rgba(0, 0, 0, 0.25);
+    }
+
+    .osi-key-white {
+      background: linear-gradient(180deg, #f3f1e8 0%, #dcd8c8 100%);
+      color: #181a1c;
+      border: 1px solid #b5b09e;
+    }
+
+    .osi-key-dark {
+      background: linear-gradient(180deg, #3c4047 0%, #26292e 100%);
+      color: #f3f4f6;
+      border: 1px solid #1b1d21;
+    }
+
+    .osi-key-red {
+      background: linear-gradient(180deg, #c9382b 0%, #992218 100%);
+      color: #ffffff;
+      border: 1px solid #75160e;
+    }
+
+    /* Custom subtle scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #14171a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #323842;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #47505e;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Header / Hardware Control Bar -->
+  <header class="bg-[#171a1f] border-b border-gray-800 px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-[#143d28] border border-emerald-500/40 flex items-center justify-center shadow-inner">
+        <span class="font-mono-code font-bold text-emerald-300 text-xs tracking-tighter">OSI</span>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm sm:text-base font-bold tracking-tight text-white">Ohio Scientific Superboard II</h1>
+          <span class="hidden md:inline-block text-[11px] font-mono-code px-2 py-0.5 rounded bg-emerald-950/90 text-emerald-300 border border-emerald-700/50">MODEL 600 • 1979</span>
+        </div>
+        <p class="text-[11px] text-gray-400 font-mono-code">MOS 6502 @ 1.00 MHz • 32K RAM • 8K BASIC • 2K MONITOR</p>
+      </div>
+    </div>
+
+    <!-- Hardware Switches & Demo Tape Selector -->
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Demo Software Selector -->
+      <div class="flex items-center gap-1.5 bg-[#101215] border border-gray-700/80 rounded-lg px-2 py-1">
+        <label for="demoSelect" class="text-[11px] text-gray-400 font-medium">Tape:</label>
+        <select id="demoSelect" class="bg-transparent text-xs text-emerald-300 font-mono-code focus:outline-none cursor-pointer">
+          <option value="" class="bg-[#171a1f]">-- Select Demo --</option>
+          <option value="graphics" class="bg-[#171a1f]">1. OSI Graphics Gallery (BASIC)</option>
+          <option value="starfighter" class="bg-[#171a1f]">2. Starfighter DF00 Arcade (BASIC)</option>
+          <option value="bounce6502" class="bg-[#171a1f]">3. 6502 Machine Code Bounce (ASM)</option>
+          <option value="maze" class="bg-[#171a1f]">4. 10 PRINT Diagonal Maze (BASIC)</option>
+          <option value="mandelbrot" class="bg-[#171a1f]">5. OSI Fractal Explorer (BASIC)</option>
+        </select>
+        <button id="loadDemoBtn" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition">
+          Load
+        </button>
+      </div>
+
+      <!-- Display Window Mode (Stock 24x24 vs Full 32x32 VRAM) -->
+      <select id="screenModeSelect" title="Video RAM Window Mode" class="bg-[#101215] border border-gray-700/80 rounded-lg px-2 py-1.5 text-xs text-gray-200 font-mono-code focus:outline-none cursor-pointer">
+        <option value="24x24">24×24 (Stock OSI)</option>
+        <option value="32x32" selected>32×32 (Full VRAM)</option>
+      </select>
+
+      <!-- CRT Phosphor Color -->
+      <select id="phosphorSelect" title="CRT Monitor Phosphor" class="bg-[#101215] border border-gray-700/80 rounded-lg px-2 py-1.5 text-xs text-gray-200 font-mono-code focus:outline-none cursor-pointer">
+        <option value="green" selected>P31 Green CRT</option>
+        <option value="amber">P3 Amber CRT</option>
+        <option value="white">P4 B&amp;W TV</option>
+      </select>
+
+      <!-- Scanlines Toggle -->
+      <button id="scanlineBtn" class="px-2.5 py-1.5 rounded-lg bg-[#101215] border border-gray-700/80 hover:border-gray-600 text-xs text-gray-200 font-medium transition">
+        Scanlines: ON
+      </button>
+
+      <!-- Sound Toggle -->
+      <button id="soundBtn" class="px-2.5 py-1.5 rounded-lg bg-[#101215] border border-gray-700/80 hover:border-gray-600 text-xs text-gray-200 font-medium transition">
+        Audio: ON
+      </button>
+
+      <!-- Hardware BREAK / Reset Button -->
+      <button id="breakBtn" title="Trigger Hardware BREAK / Reset to D/C/W/M ?" class="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs font-bold tracking-wide shadow transition">
+        BREAK
+      </button>
+    </div>
+  </header>
+
+  <!-- Inline Status Toast Banner (Replaces alert/confirm) -->
+  <div id="toastBanner" class="hidden fixed bottom-4 right-4 z-50 max-w-md px-4 py-2.5 rounded-xl bg-gray-900/95 border border-emerald-500/50 text-xs text-emerald-200 shadow-2xl backdrop-blur font-mono-code"></div>
+
+  <!-- Main Emulator Workspace -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-5 grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+
+    <!-- LEFT COLUMN: CRT Monitor + Superboard II PCB Keyboard -->
+    <section class="xl:col-span-7 flex flex-col gap-4">
+
+      <!-- 1979 Composite Video Monitor -->
+      <div class="crt-bezel rounded-2xl p-3 sm:p-5 border border-gray-700/60">
+        <div class="flex items-center justify-between mb-2 px-1">
+          <div class="flex items-center gap-2">
+            <span id="powerLed" class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]"></span>
+            <span class="text-[11px] font-mono-code uppercase tracking-widest text-gray-400">Composite Video • $D000–$D3FF</span>
+          </div>
+          <div class="flex items-center gap-3 text-[11px] font-mono-code text-gray-400">
+            <span id="modeIndicator" class="text-emerald-400 font-semibold">MODE: BOOT PROMPT</span>
+            <span id="kbdFocusHint" class="hidden sm:inline text-gray-500">Click screen or type keys</span>
+          </div>
+        </div>
+
+        <!-- Screen Container -->
+        <div id="crtScreenWrap" tabindex="0" class="crt-screen-wrap crt-scanlines crt-vignette w-full aspect-[4/3] max-h-[470px] mx-auto cursor-text focus:outline-none focus:ring-2 focus:ring-emerald-500/60">
+          <canvas id="crtCanvas" class="w-full h-full block"></canvas>
+        </div>
+
+        <!-- Quick Boot Shortcut Bar under CRT -->
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-2 px-1">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-[11px] text-gray-400 font-mono-code mr-1">Quick Boot:</span>
+            <button data-boot="C" class="quick-boot-btn px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-600/70 text-[11px] font-mono-code text-emerald-300 font-semibold transition">
+              [C] Cold BASIC
+            </button>
+            <button data-boot="W" class="quick-boot-btn px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-600/70 text-[11px] font-mono-code text-sky-300 font-semibold transition">
+              [W] Warm BASIC
+            </button>
+            <button data-boot="M" class="quick-boot-btn px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-600/70 text-[11px] font-mono-code text-amber-300 font-semibold transition">
+              [M] 6502 Monitor
+            </button>
+          </div>
+          <div class="text-[11px] font-mono-code text-gray-400">
+            <span id="ipsBadge">1.00 MHz</span> • <span id="ramSizeBadge">32K RAM</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Superboard II Single-Board Computer PCB & 53-Key Matrix Keyboard -->
+      <div class="osi-pcb rounded-2xl p-3 sm:p-4">
+        <!-- PCB Silkscreen Header & DIP Chip Visuals -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-3 border-b border-emerald-700/60 text-[10px] font-mono-code text-emerald-100/85">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-1.5 py-0.5 rounded bg-[#0a2115] border border-emerald-600/50 font-bold tracking-wider">OHIO SCIENTIFIC INC. © 1979</span>
+            <span class="hidden sm:inline">REV D • MODEL 600</span>
+          </div>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="px-1.5 py-0.5 rounded bg-gray-900/90 border border-gray-600 text-gray-200">U1: SY6502</span>
+            <span class="px-1.5 py-0.5 rounded bg-gray-900/90 border border-gray-600 text-gray-200">U2-U5: 8K BASIC</span>
+            <span class="px-1.5 py-0.5 rounded bg-gray-900/90 border border-gray-600 text-gray-200">U6: SYN600</span>
+            <span class="px-1.5 py-0.5 rounded bg-gray-900/90 border border-gray-600 text-gray-200">I/O: $DF00</span>
+          </div>
+        </div>
+
+        <!-- 53-Key Interactive Matrix Keyboard -->
+        <div id="virtualKeyboard" class="flex flex-col gap-1.5 select-none">
+          <!-- Populated dynamically by JavaScript to mirror the exact 8x8 matrix -->
+        </div>
+
+        <div class="mt-2.5 flex items-center justify-between text-[10px] font-mono-code text-emerald-200/75 px-1">
+          <span>POLLED 8×8 MATRIX ($DF00 / 57088)</span>
+          <span id="df00DebugText">LATCH: $FF • READ: $FF</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT COLUMN: 6502 CPU Debugger, Mini-Assembler, Hex Viewer, Tape & Docs -->
+    <aside class="xl:col-span-5 bg-[#171a1f] rounded-2xl border border-gray-800 overflow-hidden flex flex-col">
+      <!-- Workbench Tabs -->
+      <div class="grid grid-cols-4 bg-[#111317] border-b border-gray-800 text-xs font-medium">
+        <button data-tab="cpu" class="tab-btn py-2.5 px-2 text-center border-b-2 border-emerald-400 text-emerald-300 bg-[#171a1f] font-semibold transition">
+          6502 &amp; ASM
+        </button>
+        <button data-tab="memory" class="tab-btn py-2.5 px-2 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
+          Memory Hex
+        </button>
+        <button data-tab="tape" class="tab-btn py-2.5 px-2 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
+          Tape / ROM
+        </button>
+        <button data-tab="guide" class="tab-btn py-2.5 px-2 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
+          OSI Guide
+        </button>
+      </div>
+
+      <!-- TAB 1: 6502 CPU Registers, Execution Controls & Mini Assembler -->
+      <div id="tab-cpu" class="tab-panel p-4 flex flex-col gap-4">
+        <!-- CPU Execution Controls -->
+        <div class="flex flex-wrap items-center justify-between gap-2 bg-[#101216] p-3 rounded-xl border border-gray-800">
+          <div class="flex items-center gap-2">
+            <button id="cpuRunPauseBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition">
+              Pause CPU
+            </button>
+            <button id="cpuStepBtn" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-600 text-xs font-mono-code text-gray-200 transition">
+              Step (1 Op)
+            </button>
+            <button id="cpuNmiBtn" title="Trigger Non-Maskable Interrupt ($FFFA)" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-600 text-xs font-mono-code text-amber-300 transition">
+              NMI
+            </button>
+          </div>
+          <div class="text-[11px] font-mono-code text-gray-400">
+            Cycles: <span id="cycleCounter" class="text-gray-200">0</span>
+          </div>
+        </div>
+
+        <!-- 6502 Registers Grid -->
+        <div class="grid grid-cols-5 gap-2 font-mono-code">
+          <div class="bg-[#101216] p-2.5 rounded-xl border border-gray-800 text-center">
+            <div class="text-[10px] text-gray-500">PC</div>
+            <div id="regPC" class="text-sm font-bold text-emerald-400 mt-0.5">$F800</div>
+          </div>
+          <div class="bg-[#101216] p-2.5 rounded-xl border border-gray-800 text-center">
+            <div class="text-[10px] text-gray-500">A (ACC)</div>
+            <div id="regA" class="text-sm font-bold text-white mt-0.5">$00</div>
+          </div>
+          <div class="bg-[#101216] p-2.5 rounded-xl border border-gray-800 text-center">
+            <div class="text-[10px] text-gray-500">X</div>
+            <div id="regX" class="text-sm font-bold text-white mt-0.5">$00</div>
+          </div>
+          <div class="bg-[#101216] p-2.5 rounded-xl border border-gray-800 text-center">
+            <div class="text-[10px] text-gray-500">Y</div>
+            <div id="regY" class="text-sm font-bold text-white mt-0.5">$00</div>
+          </div>
+          <div class="bg-[#101216] p-2.5 rounded-xl border border-gray-800 text-center">
+            <div class="text-[10px] text-gray-500">SP</div>
+            <div id="regSP" class="text-sm font-bold text-sky-300 mt-0.5">$FF</div>
+          </div>
+        </div>
+
+        <!-- Processor Status Flags (NV-BDIZC) -->
+        <div class="bg-[#101216] p-2.5 rounded-xl border border-gray-800 flex items-center justify-between font-mono-code text-xs">
+          <span class="text-gray-400 text-[11px]">Status (P):</span>
+          <div id="regFlags" class="flex items-center gap-1.5">
+            <!-- N V - B D I Z C badges -->
+          </div>
+        </div>
+
+        <!-- Live Disassembly Window -->
+        <div class="bg-[#101216] rounded-xl border border-gray-800 p-3">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-semibold text-gray-300">Live 6502 Disassembly</span>
+            <span class="text-[10px] font-mono-code text-gray-500">Next Instructions at PC</span>
+          </div>
+          <pre id="disasmView" class="font-mono-code text-xs text-emerald-300/90 leading-relaxed overflow-x-auto"></pre>
+        </div>
+
+        <!-- Built-in 6502 Mini-Assembler -->
+        <div class="bg-[#101216] rounded-xl border border-gray-800 p-3 flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-amber-300">6502 Mini-Assembler</span>
+            <div class="flex items-center gap-1.5 text-[11px] font-mono-code">
+              <label for="asmOrigin" class="text-gray-400">ORG $</label>
+              <input id="asmOrigin" type="text" value="0200" maxlength="4" class="w-14 px-1.5 py-0.5 rounded bg-[#181b20] border border-gray-700 text-amber-300 uppercase focus:outline-none" />
+            </div>
+          </div>
+          <textarea id="asmEditor" rows="7" spellcheck="false" class="w-full rounded-lg bg-[#181b20] border border-gray-700 p-2.5 font-mono-code text-xs text-gray-100 focus:outline-none focus:border-amber-400/70" placeholder="; Enter 6502 assembly instructions...">; Fill Video RAM ($D000-$D3FF) with OSI graphics
+LDX #$00
+LOOP:
+TXA
+ORA #$80
+STA $D000,X
+STA $D100,X
+STA $D200,X
+STA $D300,X
+INX
+BNE LOOP
+RTS</textarea>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <button id="assembleLoadBtn" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold transition">
+              Assemble to RAM
+            </button>
+            <button id="assembleRunBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition">
+              Assemble &amp; Execute (JMP)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Live Memory & Video RAM Hex Inspector -->
+      <div id="tab-memory" class="tab-panel hidden p-4 flex flex-col gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 font-mono-code text-xs">
+            <span class="text-gray-400">Addr $</span>
+            <input id="memAddrInput" type="text" value="D000" maxlength="4" class="w-16 px-2 py-1 rounded bg-[#101216] border border-gray-700 text-emerald-300 uppercase focus:outline-none" />
+            <button id="memGoBtn" class="px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs transition">View</button>
+          </div>
+          <div class="flex flex-wrap gap-1 text-[10px] font-mono-code">
+            <button data-memjump="0000" class="mem-jump px-2 py-1 rounded bg-[#101216] hover:bg-gray-800 border border-gray-700 text-gray-300">$0000 ZP</button>
+            <button data-memjump="0200" class="mem-jump px-2 py-1 rounded bg-[#101216] hover:bg-gray-800 border border-gray-700 text-gray-300">$0200 RAM</button>
+            <button data-memjump="0300" class="mem-jump px-2 py-1 rounded bg-[#101216] hover:bg-gray-800 border border-gray-700 text-gray-300">$0300 BAS</button>
+            <button data-memjump="D000" class="mem-jump px-2 py-1 rounded bg-[#101216] hover:bg-gray-800 border border-gray-700 text-emerald-300">$D000 VID</button>
+            <button data-memjump="F800" class="mem-jump px-2 py-1 rounded bg-[#101216] hover:bg-gray-800 border border-gray-700 text-amber-300">$F800 ROM</button>
+          </div>
+        </div>
+
+        <!-- Quick Poke Utility -->
+        <div class="flex items-center gap-2 bg-[#101216] p-2.5 rounded-xl border border-gray-800 font-mono-code text-xs">
+          <span class="text-gray-400">POKE $</span>
+          <input id="pokeAddrInput" type="text" value="D085" maxlength="4" class="w-14 px-1.5 py-0.5 rounded bg-[#181b20] border border-gray-700 text-white uppercase" />
+          <span class="text-gray-400">, $</span>
+          <input id="pokeValInput" type="text" value="98" maxlength="2" class="w-10 px-1.5 py-0.5 rounded bg-[#181b20] border border-gray-700 text-white uppercase" />
+          <button id="pokeWriteBtn" class="px-2.5 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-semibold transition">Write Byte</button>
+        </div>
+
+        <!-- Hex Dump Display -->
+        <div class="bg-[#0d0f12] rounded-xl border border-gray-800 p-3 overflow-x-auto">
+          <pre id="hexDumpView" class="font-mono-code text-[11px] leading-5 text-gray-300"></pre>
+        </div>
+      </div>
+
+      <!-- TAB 3: Cassette Tape / BASIC Listing & Binary ROM Loader -->
+      <div id="tab-tape" class="tab-panel hidden p-4 flex flex-col gap-4">
+        <!-- BASIC Cassette Tape Buffer -->
+        <div class="bg-[#101216] rounded-xl border border-gray-800 p-3 flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-emerald-300">Cassette Tape Interface (BASIC)</span>
+            <div class="flex gap-1.5">
+              <button id="tapeExportBtn" class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-[11px] font-mono-code text-gray-200">
+                Save Program to Tape
+              </button>
+            </div>
+          </div>
+          <p class="text-[11px] text-gray-400">Paste or edit an OSI BASIC program below and inject it straight into Superboard II memory:</p>
+          <textarea id="tapeEditor" rows="8" spellcheck="false" class="w-full rounded-lg bg-[#181b20] border border-gray-700 p-2.5 font-mono-code text-xs text-gray-100 focus:outline-none focus:border-emerald-500" placeholder="10 PRINT &quot;HELLO OHIO SCIENTIFIC!&quot;&#10;20 GOTO 10">10 REM OHIO SCIENTIFIC SUPERBOARD II
+20 FOR I=0 TO 31
+30 POKE 53248+I, 128+I
+40 NEXT I
+50 PRINT "SUPERBOARD II READY!"
+</textarea>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-600 text-xs text-gray-200 cursor-pointer transition">
+              Upload .BAS / .TXT
+              <input id="tapeFileInput" type="file" accept=".bas,.txt" class="hidden" />
+            </label>
+            <div class="flex gap-2">
+              <button id="tapeLoadBtn" class="px-3 py-1.5 rounded-lg bg-sky-700 hover:bg-sky-600 text-white text-xs font-semibold transition">
+                Load to RAM
+              </button>
+              <button id="tapeLoadRunBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition">
+                Load &amp; RUN
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Binary ROM / Machine Code Image Loader -->
+        <div class="bg-[#101216] rounded-xl border border-gray-800 p-3 flex flex-col gap-2">
+          <span class="text-xs font-semibold text-amber-300">Binary / Custom ROM Image Loader (.BIN / .ROM)</span>
+          <p class="text-[11px] text-gray-400">Load raw 6502 binary dumps (e.g., CEGMON at $F800, or machine code at $0200):</p>
+          <div class="flex flex-wrap items-center gap-2 font-mono-code text-xs">
+            <span class="text-gray-400">Load Address $</span>
+            <input id="binAddrInput" type="text" value="0200" maxlength="4" class="w-16 px-2 py-1 rounded bg-[#181b20] border border-gray-700 text-amber-300 uppercase" />
+            <label class="px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-white font-sans font-semibold cursor-pointer transition">
+              Choose .BIN File
+              <input id="binFileInput" type="file" accept=".bin,.rom,.obj" class="hidden" />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: Superboard II Hardware Reference & Quick Manual -->
+      <div id="tab-guide" class="tab-panel hidden p-4 flex flex-col gap-3 text-xs text-gray-300 leading-relaxed max-h-[640px] overflow-y-auto">
+        <div class="bg-[#101216] p-3 rounded-xl border border-gray-800">
+          <h3 class="font-bold text-emerald-300 mb-1">1. Booting the Superboard II (`D/C/W/M ?`)</h3>
+          <p class="text-gray-400">On power-up or after pressing <strong class="text-red-400">BREAK</strong>, the SYN600 Monitor displays <code class="text-emerald-300">D/C/W/M ?</code>:</p>
+          <ul class="list-disc list-inside mt-1 space-y-1 text-gray-300 font-mono-code text-[11px]">
+            <li><strong class="text-emerald-300">C</strong> — Cold Start 8K Microsoft BASIC (clears RAM)</li>
+            <li><strong class="text-sky-300">W</strong> — Warm Start BASIC (preserves program in RAM)</li>
+            <li><strong class="text-amber-300">M</strong> — Enter 6502 Machine Language Monitor</li>
+            <li><strong class="text-gray-300">D</strong> — Boot OS-65D Floppy Disk (returns to prompt if no drive)</li>
+          </ul>
+        </div>
+
+        <div class="bg-[#101216] p-3 rounded-xl border border-gray-800">
+          <h3 class="font-bold text-amber-300 mb-1">2. 6502 Machine Language Monitor Commands</h3>
+          <p class="text-gray-400 mb-1">Inside Monitor mode (<code class="text-amber-300">M</code>), type uppercase hex commands:</p>
+          <ul class="list-disc list-inside space-y-1 text-gray-300 font-mono-code text-[11px]">
+            <li><code class="text-amber-300">.0200</code> — Set current address pointer to <code class="text-gray-200">$0200</code></li>
+            <li><code class="text-amber-300">/A9 41 8D 85 D0 60</code> — Store hex bytes sequentially &amp; advance</li>
+            <li><code class="text-amber-300">G</code> — Execute 6502 code at current address (<code class="text-gray-200">JMP</code>)</li>
+            <li><code class="text-amber-300">L</code> — List 64 bytes of hex memory from current address</li>
+            <li><code class="text-amber-300">R</code> — Reset back to <code class="text-gray-200">D/C/W/M ?</code> prompt</li>
+          </ul>
+        </div>
+
+        <div class="bg-[#101216] p-3 rounded-xl border border-gray-800">
+          <h3 class="font-bold text-sky-300 mb-1">3. Superboard II Memory Map</h3>
+          <div class="font-mono-code text-[11px] space-y-1 text-gray-300">
+            <div class="flex justify-between"><span>$0000–$00FF</span><span class="text-gray-400">6502 Zero Page</span></div>
+            <div class="flex justify-between"><span>$0100–$01FF</span><span class="text-gray-400">6502 Hardware Stack</span></div>
+            <div class="flex justify-between"><span>$0200–$7FFF</span><span class="text-gray-400">User RAM &amp; BASIC Program</span></div>
+            <div class="flex justify-between"><span>$A000–$BFFF</span><span class="text-gray-400">8K Microsoft 6502 BASIC ROM</span></div>
+            <div class="flex justify-between"><span class="text-emerald-300">$D000–$D3FF</span><span class="text-gray-400">1K Video RAM (53248–54271)</span></div>
+            <div class="flex justify-between"><span class="text-emerald-300">$DF00</span><span class="text-gray-400">8×8 Keyboard Matrix (57088)</span></div>
+            <div class="flex justify-between"><span>$F800–$FFFF</span><span class="text-gray-400">2K SYN600 System Monitor ROM</span></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    "use strict";
+
+    /**
+     * ============================================================================
+     * SECTION 1: OHIO SCIENTIFIC CHARACTER GENERATOR ROM (256 GLYPHS, 8x8 PIXELS)
+     * ============================================================================
+     * The Superboard II stores 256 8x8 pixel patterns in a 2KB Character ROM:
+     * - $00-$1F: Control / special symbols
+     * - $20-$7F: Standard ASCII (uppercase, lowercase, digits, punctuation)
+     * - $80-$FF: Iconic OSI pseudo-graphics (blocks, diagonals, box lines, card
+     *            suits, checkerboards, spaceship/tank/invader sprites).
+     */
+    const FONT_5X7_ASCII = {
+      0x20: [0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00], // ' '
+      0x21: [0x18,0x18,0x18,0x18,0x18,0x00,0x18,0x00], // '!'
+      0x22: [0x6C,0x6C,0x24,0x00,0x00,0x00,0x00,0x00], // '"'
+      0x23: [0x6C,0x6C,0xFE,0x6C,0xFE,0x6C,0x6C,0x00], // '#'
+      0x24: [0x18,0x7E,0xC0,0x7C,0x06,0xFC,0x18,0x00], // '$'
+      0x25: [0x00,0xC6,0xCC,0x18,0x30,0x66,0xC6,0x00], // '%'
+      0x26: [0x38,0x6C,0x38,0x76,0xDC,0xCC,0x76,0x00], // '&'
+      0x27: [0x18,0x18,0x30,0x00,0x00,0x00,0x00,0x00], // '''
+      0x28: [0x0C,0x18,0x30,0x30,0x30,0x18,0x0C,0x00], // '('
+      0x29: [0x30,0x18,0x0C,0x0C,0x0C,0x18,0x30,0x00], // ')'
+      0x2A: [0x00,0x66,0x3C,0xFF,0x3C,0x66,0x00,0x00], // '*'
+      0x2B: [0x00,0x18,0x18,0x7E,0x18,0x18,0x00,0x00], // '+'
+      0x2C: [0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x30], // ','
+      0x2D: [0x00,0x00,0x00,0x7E,0x00,0x00,0x00,0x00], // '-'
+      0x2E: [0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00], // '.'
+      0x2F: [0x06,0x0C,0x18,0x30,0x60,0xC0,0x80,0x00], // '/'
+      0x30: [0x7C,0xC6,0xCE,0xD6,0xE6,0xC6,0x7C,0x00], // '0'
+      0x31: [0x18,0x38,0x18,0x18,0x18,0x18,0x7E,0x00], // '1'
+      0x32: [0x7C,0xC6,0x06,0x1C,0x30,0x66,0xFE,0x00], // '2'
+      0x33: [0x7C,0xC6,0x06,0x3C,0x06,0xC6,0x7C,0x00], // '3'
+      0x34: [0x1C,0x3C,0x6C,0xCC,0xFE,0x0C,0x1E,0x00], // '4'
+      0x35: [0xFE,0xC0,0xFC,0x06,0x06,0xC6,0x7C,0x00], // '5'
+      0x36: [0x38,0x60,0xC0,0xFC,0xC6,0xC6,0x7C,0x00], // '6'
+      0x37: [0xFE,0xC6,0x0C,0x18,0x30,0x30,0x30,0x00], // '7'
+      0x38: [0x7C,0xC6,0xC6,0x7C,0xC6,0xC6,0x7C,0x00], // '8'
+      0x39: [0x7C,0xC6,0xC6,0x7E,0x06,0x0C,0x78,0x00], // '9'
+      0x3A: [0x00,0x18,0x18,0x00,0x00,0x18,0x18,0x00], // ':'
+      0x3B: [0x00,0x18,0x18,0x00,0x00,0x18,0x18,0x30], // ';'
+      0x3C: [0x0C,0x18,0x30,0x60,0x30,0x18,0x0C,0x00], // '<'
+      0x3D: [0x00,0x00,0x7E,0x00,0x7E,0x00,0x00,0x00], // '='
+      0x3E: [0x30,0x18,0x0C,0x06,0x0C,0x18,0x30,0x00], // '>'
+      0x3F: [0x7C,0xC6,0x0C,0x18,0x18,0x00,0x18,0x00], // '?'
+      0x40: [0x7C,0xC6,0xDE,0xDE,0xDE,0xC0,0x78,0x00], // '@'
+      0x41: [0x38,0x6C,0xC6,0xC6,0xFE,0xC6,0xC6,0x00], // 'A'
+      0x42: [0xFC,0x66,0x66,0x7C,0x66,0x66,0xFC,0x00], // 'B'
+      0x43: [0x3C,0x66,0xC0,0xC0,0xC0,0x66,0x3C,0x00], // 'C'
+      0x44: [0xF8,0x6C,0x66,0x66,0x66,0x6C,0xF8,0x00], // 'D'
+      0x45: [0xFE,0x62,0x68,0x78,0x68,0x62,0xFE,0x00], // 'E'
+      0x46: [0xFE,0x62,0x68,0x78,0x68,0x60,0xF0,0x00], // 'F'
+      0x47: [0x3C,0x66,0xC0,0xC0,0xCE,0x66,0x3E,0x00], // 'G'
+      0x48: [0xC6,0xC6,0xC6,0xFE,0xC6,0xC6,0xC6,0x00], // 'H'
+      0x49: [0x7E,0x18,0x18,0x18,0x18,0x18,0x7E,0x00], // 'I'
+      0x4A: [0x1E,0x06,0x06,0x06,0xC6,0xC6,0x7C,0x00], // 'J'
+      0x4B: [0xE6,0x66,0x6C,0x78,0x6C,0x66,0xE6,0x00], // 'K'
+      0x4C: [0xF0,0x60,0x60,0x60,0x62,0x66,0xFE,0x00], // 'L'
+      0x4D: [0xC6,0xEE,0xFE,0xFE,0xD6,0xC6,0xC6,0x00], // 'M'
+      0x4E: [0xC6,0xE6,0xF6,0xDE,0xCE,0xC6,0xC6,0x00], // 'N'
+      0x4F: [0x7C,0xC6,0xC6,0xC6,0xC6,0xC6,0x7C,0x00], // 'O'
+      0x50: [0xFC,0x66,0x66,0x7C,0x60,0x60,0xF0,0x00], // 'P'
+      0x51: [0x7C,0xC6,0xC6,0xC6,0xD6,0xDE,0x7C,0x06], // 'Q'
+      0x52: [0xFC,0x66,0x66,0x7C,0x6C,0x66,0xE6,0x00], // 'R'
+      0x53: [0x7C,0xC6,0xE0,0x78,0x0E,0xC6,0x7C,0x00], // 'S'
+      0x54: [0x7E,0x5A,0x18,0x18,0x18,0x18,0x3C,0x00], // 'T'
+      0x55: [0xC6,0xC6,0xC6,0xC6,0xC6,0xC6,0x7C,0x00], // 'U'
+      0x56: [0xC6,0xC6,0xC6,0xC6,0x6C,0x38,0x10,0x00], // 'V'
+      0x57: [0xC6,0xC6,0xC6,0xD6,0xFE,0xEE,0xC6,0x00], // 'W'
+      0x58: [0xC6,0x6C,0x38,0x38,0x6C,0xC6,0xC6,0x00], // 'X'
+      0x59: [0x66,0x66,0x66,0x3C,0x18,0x18,0x3C,0x00], // 'Y'
+      0x5A: [0xFE,0xC6,0x8C,0x18,0x32,0x66,0xFE,0x00], // 'Z'
+      0x5B: [0x3C,0x30,0x30,0x30,0x30,0x30,0x3C,0x00], // '['
+      0x5C: [0xC0,0x60,0x30,0x18,0x0C,0x06,0x02,0x00], // '\'
+      0x5D: [0x3C,0x0C,0x0C,0x0C,0x0C,0x0C,0x3C,0x00], // ']'
+      0x5E: [0x10,0x38,0x6C,0xC6,0x00,0x00,0x00,0x00], // '^'
+      0x5F: [0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF], // '_'
+      0x60: [0x30,0x18,0x0C,0x00,0x00,0x00,0x00,0x00], // '`'
+      0x61: [0x00,0x00,0x78,0x0C,0x7C,0xCC,0x76,0x00], // 'a'
+      0x62: [0xE0,0x60,0x7C,0x66,0x66,0x66,0xDC,0x00], // 'b'
+      0x63: [0x00,0x00,0x7C,0xC6,0xC0,0xC6,0x7C,0x00], // 'c'
+      0x64: [0x1C,0x0C,0x7C,0xCC,0xCC,0xCC,0x76,0x00], // 'd'
+      0x65: [0x00,0x00,0x7C,0xC6,0xFE,0xC0,0x7C,0x00], // 'e'
+      0x66: [0x38,0x6C,0x60,0xF0,0x60,0x60,0xF0,0x00], // 'f'
+      0x67: [0x00,0x00,0x76,0xCC,0xCC,0x7C,0x0C,0xF8], // 'g'
+      0x68: [0xE0,0x60,0x6C,0x76,0x66,0x66,0xE6,0x00], // 'h'
+      0x69: [0x18,0x00,0x38,0x18,0x18,0x18,0x3C,0x00], // 'i'
+      0x6A: [0x06,0x00,0x06,0x06,0x06,0x66,0x66,0x3C], // 'j'
+      0x6B: [0xE0,0x60,0x66,0x6C,0x78,0x6C,0xE6,0x00], // 'k'
+      0x6C: [0x38,0x18,0x18,0x18,0x18,0x18,0x3C,0x00], // 'l'
+      0x6D: [0x00,0x00,0xEC,0xFE,0xD6,0xD6,0xC6,0x00], // 'm'
+      0x6E: [0x00,0x00,0xDC,0x66,0x66,0x66,0x66,0x00], // 'n'
+      0x6F: [0x00,0x00,0x7C,0xC6,0xC6,0xC6,0x7C,0x00], // 'o'
+      0x70: [0x00,0x00,0xDC,0x66,0x66,0x7C,0x60,0xF0], // 'p'
+      0x71: [0x00,0x00,0x76,0xCC,0xCC,0x7C,0x0C,0x1E], // 'q'
+      0x72: [0x00,0x00,0xDC,0x76,0x60,0x60,0xF0,0x00], // 'r'
+      0x73: [0x00,0x00,0x7C,0xC0,0x7C,0x06,0xFC,0x00], // 's'
+      0x74: [0x30,0x30,0x7C,0x30,0x30,0x34,0x18,0x00], // 't'
+      0x75: [0x00,0x00,0xCC,0xCC,0xCC,0xCC,0x76,0x00], // 'u'
+      0x76: [0x00,0x00,0xC6,0xC6,0xC6,0x6C,0x38,0x00], // 'v'
+      0x77: [0x00,0x00,0xC6,0xD6,0xD6,0xFE,0x6C,0x00], // 'w'
+      0x78: [0x00,0x00,0xC6,0x6C,0x38,0x6C,0xC6,0x00], // 'x'
+      0x79: [0x00,0x00,0xC6,0xC6,0xC6,0x7E,0x06,0xFC], // 'y'
+      0x7A: [0x00,0x00,0xFE,0x8C,0x18,0x32,0xFE,0x00], // 'z'
+      0x7B: [0x0E,0x18,0x18,0x70,0x18,0x18,0x0E,0x00], // '{'
+      0x7C: [0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x00], // '|'
+      0x7D: [0x70,0x18,0x18,0x0E,0x18,0x18,0x70,0x00], // '}'
+      0x7E: [0x76,0xDC,0x00,0x00,0x00,0x00,0x00,0x00], // '~'
+      0x7F: [0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF]  // Solid cursor block
+    };
+
+    /**
+     * Builds the complete 256-entry 8x8 bitmap ROM (Uint8Array of 2048 bytes).
+     * Codes 128-255 ($80-$FF) reproduce the authentic Ohio Scientific graphic set!
+     */
+    function buildOSICharacterROM() {
+      const rom = new Uint8Array(256 * 8);
+
+      // 1. Control characters $00-$1F (custom geometric symbols + blank $00)
+      for (let c = 0; c < 0x20; c++) {
+        for (let r = 0; r < 8; r++) {
+          if (c === 0) rom[c * 8 + r] = 0x00;
+          else rom[c * 8 + r] = ((c * 37 + r * 13) & 0x7E);
+        }
+      }
+
+      // 2. Standard ASCII $20-$7F
+      for (let c = 0x20; c <= 0x7F; c++) {
+        const glyph = FONT_5X7_ASCII[c] || [0,0,0,0,0,0,0,0];
+        for (let r = 0; r < 8; r++) {
+          rom[c * 8 + r] = glyph[r];
+        }
+      }
+
+      // 3. Authentic Ohio Scientific Graphic Characters $80-$FF
+      const setGlyph = (code, rows) => {
+        for (let r = 0; r < 8; r++) rom[code * 8 + r] = rows[r] || 0;
+      };
+
+      // $80: Solid Block
+      setGlyph(0x80, [0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF]);
+      // $81-$84: Horizontal bars (top, upper-mid, lower-mid, bottom)
+      setGlyph(0x81, [0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00]);
+      setGlyph(0x82, [0x00,0x00,0xFF,0xFF,0x00,0x00,0x00,0x00]);
+      setGlyph(0x83, [0x00,0x00,0x00,0x00,0xFF,0xFF,0x00,0x00]);
+      setGlyph(0x84, [0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0xFF]);
+      // $85-$87: Vertical bars (left, center, right)
+      setGlyph(0x85, [0xC0,0xC0,0xC0,0xC0,0xC0,0xC0,0xC0,0xC0]);
+      setGlyph(0x86, [0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18]);
+      setGlyph(0x87, [0x03,0x03,0x03,0x03,0x03,0x03,0x03,0x03]);
+      // $88-$8B: Diagonals & Triangle wedges (used for 10 PRINT mazes & borders!)
+      setGlyph(0x88, [0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01]); // '\' full diagonal
+      setGlyph(0x89, [0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80]); // '/' full diagonal
+      setGlyph(0x8A, [0x80,0xC0,0xE0,0xF0,0xF8,0xFC,0xFE,0xFF]); // Lower-left triangle
+      setGlyph(0x8B, [0x01,0x03,0x07,0x0F,0x1F,0x3F,0x7F,0xFF]); // Lower-right triangle
+      // $8C-$8F: Box drawing corners
+      setGlyph(0x8C, [0x00,0x00,0x00,0x1F,0x18,0x18,0x18,0x18]); // Top-left ┌
+      setGlyph(0x8D, [0x00,0x00,0x00,0xF8,0x18,0x18,0x18,0x18]); // Top-right ┐
+      setGlyph(0x8E, [0x18,0x18,0x18,0x1F,0x00,0x00,0x00,0x00]); // Bottom-left └
+      setGlyph(0x8F, [0x18,0x18,0x18,0xF8,0x00,0x00,0x00,0x00]); // Bottom-right ┘
+      // $90-$97: Box T-junctions, cross, horizontal, vertical
+      setGlyph(0x90, [0x18,0x18,0x18,0x1F,0x18,0x18,0x18,0x18]); // ├
+      setGlyph(0x91, [0x18,0x18,0x18,0xF8,0x18,0x18,0x18,0x18]); // ┤
+      setGlyph(0x92, [0x00,0x00,0x00,0xFF,0x18,0x18,0x18,0x18]); // ┬
+      setGlyph(0x93, [0x18,0x18,0x18,0xFF,0x00,0x00,0x00,0x00]); // ┴
+      setGlyph(0x94, [0x18,0x18,0x18,0xFF,0x18,0x18,0x18,0x18]); // ┼
+      setGlyph(0x95, [0x00,0x00,0x00,0xFF,0x00,0x00,0x00,0x00]); // ─
+      setGlyph(0x96, [0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18]); // │
+      setGlyph(0x97, [0x3C,0x7E,0xFF,0xFF,0xFF,0xFF,0x7E,0x3C]); // Filled circle / ball ●
+      // $98-$9B: Classic OSI Card Suits (Spade, Heart, Diamond, Club)
+      setGlyph(0x98, [0x18,0x3C,0x7E,0xFF,0xFF,0x5A,0x18,0x3C]); // Spade ♠
+      setGlyph(0x99, [0x66,0xFF,0xFF,0xFF,0x7E,0x3C,0x18,0x00]); // Heart ♥
+      setGlyph(0x9A, [0x18,0x3C,0x7E,0xFF,0x7E,0x3C,0x18,0x00]); // Diamond ♦
+      setGlyph(0x9B, [0x3C,0x3C,0xDB,0xFF,0xDB,0x18,0x18,0x3C]); // Club ♣
+      // $9C-$9F: Checkerboard, brick, stipple, X-cross
+      setGlyph(0x9C, [0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55]); // Fine checkerboard
+      setGlyph(0x9D, [0xCC,0xCC,0x33,0x33,0xCC,0xCC,0x33,0x33]); // Coarse checkerboard
+      setGlyph(0x9E, [0xFF,0x88,0x88,0xFF,0x22,0x22,0xFF,0x00]); // Brick wall
+      setGlyph(0x9F, [0x81,0x42,0x24,0x18,0x18,0x24,0x42,0x81]); // X cross
+
+      // $A0-$AF: 16-combination 2x2 Quadrant Sub-pixel Blocks!
+      for (let q = 0; q < 16; q++) {
+        const top = ((q & 1) ? 0xF0 : 0x00) | ((q & 2) ? 0x0F : 0x00);
+        const bot = ((q & 4) ? 0xF0 : 0x00) | ((q & 8) ? 0x0F : 0x00);
+        setGlyph(0xA0 + q, [top, top, top, top, bot, bot, bot, bot]);
+      }
+
+      // $B0-$BF: Arrows, Ships, Aliens & Arcade Sprites!
+      setGlyph(0xB0, [0x18,0x3C,0x7E,0x18,0x18,0x18,0x18,0x18]); // Up arrow ↑
+      setGlyph(0xB1, [0x18,0x18,0x18,0x18,0x18,0x7E,0x3C,0x18]); // Down arrow ↓
+      setGlyph(0xB2, [0x10,0x30,0x7F,0xFF,0x7F,0x30,0x10,0x00]); // Left arrow ←
+      setGlyph(0xB3, [0x08,0x0C,0xFE,0xFF,0xFE,0x0C,0x08,0x00]); // Right arrow →
+      setGlyph(0xB4, [0x18,0x18,0x3C,0x3C,0x7E,0xFF,0xDB,0x81]); // Starfighter Ship ▲
+      setGlyph(0xB5, [0x3C,0x7E,0xDB,0xFF,0xFF,0x5A,0x24,0x42]); // Space Invader A
+      setGlyph(0xB6, [0x24,0x7E,0xDB,0xFF,0xBD,0x99,0x24,0x66]); // Space Invader B
+      setGlyph(0xB7, [0x18,0x3C,0x7E,0xFF,0x3C,0x3C,0x7E,0x00]); // Tank / Turret
+      setGlyph(0xB8, [0x81,0x42,0x18,0x7E,0x7E,0x18,0x42,0x81]); // Explosion 1
+      setGlyph(0xB9, [0x5A,0x24,0x99,0x42,0x42,0x99,0x24,0x5A]); // Explosion 2
+      setGlyph(0xBA, [0x3C,0x42,0xA5,0x81,0xA5,0x99,0x42,0x3C]); // Smiley ☺
+      setGlyph(0xBB, [0x18,0x18,0x7E,0x18,0x18,0x24,0x42,0x81]); // Stick figure
+      setGlyph(0xBC, [0xFF,0x81,0x81,0x81,0x81,0x81,0x81,0xFF]); // Hollow box □
+      setGlyph(0xBD, [0x3C,0x42,0x81,0x81,0x81,0x81,0x42,0x3C]); // Hollow circle ○
+      setGlyph(0xBE, [0x18,0x24,0x42,0x81,0x81,0x42,0x24,0x18]); // Hollow diamond ◇
+      setGlyph(0xBF, [0xFF,0xFF,0xC3,0xC3,0xC3,0xC3,0xFF,0xFF]); // Thick frame
+
+      // $C0-$FF: Fill remaining 64 graphic codes with inverted/mirrored geometric & shaded bars
+      for (let c = 0xC0; c <= 0xFF; c++) {
+        const idx = c - 0xC0;
+        if (idx < 8) {
+          // Vertical progressive fill (1 to 8 pixels wide)
+          const mask = (0xFF << (7 - idx)) & 0xFF;
+          setGlyph(c, [mask,mask,mask,mask,mask,mask,mask,mask]);
+        } else if (idx < 16) {
+          // Horizontal progressive fill (1 to 8 pixels tall from bottom)
+          const rows = [];
+          const h = (idx - 8) + 1;
+          for (let r = 0; r < 8; r++) rows.push(r >= (8 - h) ? 0xFF : 0x00);
+          setGlyph(c, rows);
+        } else {
+          // Inverted ASCII uppercase ($D0-$EF) and decorative borders ($F0-$FF)
+          const src = (c >= 0xD0 && c <= 0xEF) ? (0x40 + (c - 0xD0)) : (0x80 + (idx & 0x1F));
+          for (let r = 0; r < 8; r++) {
+            rom[c * 8 + r] = (~rom[src * 8 + r]) & 0xFF;
+          }
+        }
+      }
+
+      return rom;
+    }
+
+    /**
+     * ============================================================================
+     * SECTION 2: COMPLETE MOS 6502 MICROPROCESSOR EMULATOR CORE
+     * ============================================================================
+     * Implements all 151 official MOS 6502 instructions, addressing modes,
+     * hardware stack ($0100-$01FF), NMI/IRQ/RESET vectors, and cycle counting.
+     */
+    class CPU6502 {
+      constructor(bus) {
+        this.bus = bus;
+        this.A = 0x00;
+        this.X = 0x00;
+        this.Y = 0x00;
+        this.SP = 0xFD;
+        this.PC = 0xF800;
+        this.P = 0x24; // NV-BDIZC (bit 5 unused always 1, I=1)
+        this.cycles = 0;
+        this.haltedOnBasicTrap = false;
+        this.buildOpcodeTable();
+      }
+
+      reset() {
+        this.A = 0x00;
+        this.X = 0x00;
+        this.Y = 0x00;
+        this.SP = 0xFD;
+        this.P = 0x24;
+        const lo = this.bus.read(0xFFFC);
+        const hi = this.bus.read(0xFFFD);
+        this.PC = (hi << 8) | lo;
+        this.haltedOnBasicTrap = false;
+      }
+
+      nmi() {
+        this.push16(this.PC);
+        this.push8((this.P & ~0x10) | 0x20);
+        this.setFlag(0x04, true); // I flag
+        this.PC = this.read16(0xFFFA);
+        this.cycles += 7;
+      }
+
+      irq() {
+        if (this.getFlag(0x04)) return;
+        this.push16(this.PC);
+        this.push8((this.P & ~0x10) | 0x20);
+        this.setFlag(0x04, true);
+        this.PC = this.read16(0xFFFE);
+        this.cycles += 7;
+      }
+
+      getFlag(mask) {
+        return (this.P & mask) !== 0;
+      }
+
+      setFlag(mask, val) {
+        if (val) this.P |= mask;
+        else this.P &= ~mask;
+        this.P |= 0x20; // Unused bit 5 is always 1
+      }
+
+      updateZN(val) {
+        this.setFlag(0x02, (val & 0xFF) === 0);
+        this.setFlag(0x80, (val & 0x80) !== 0);
+      }
+
+      read8(addr) {
+        return this.bus.read(addr & 0xFFFF);
+      }
+
+      write8(addr, val) {
+        this.bus.write(addr & 0xFFFF, val & 0xFF);
+      }
+
+      read16(addr) {
+        const lo = this.read8(addr);
+        const hi = this.read8((addr + 1) & 0xFFFF);
+        return (hi << 8) | lo;
+      }
+
+      push8(val) {
+        this.write8(0x0100 | this.SP, val & 0xFF);
+        this.SP = (this.SP - 1) & 0xFF;
+      }
+
+      pop8() {
+        this.SP = (this.SP + 1) & 0xFF;
+        return this.read8(0x0100 | this.SP);
+      }
+
+      push16(val) {
+        this.push8((val >> 8) & 0xFF);
+        this.push8(val & 0xFF);
+      }
+
+      pop16() {
+        const lo = this.pop8();
+        const hi = this.pop8();
+        return (hi << 8) | lo;
+      }
+
+      // Addressing mode helpers
+      addrIMP() { return 0; }
+      addrIMM() { const a = this.PC; this.PC = (this.PC + 1) & 0xFFFF; return a; }
+      addrZP()  { const a = this.read8(this.PC); this.PC = (this.PC + 1) & 0xFFFF; return a; }
+      addrZPX() { const a = (this.read8(this.PC) + this.X) & 0xFF; this.PC = (this.PC + 1) & 0xFFFF; return a; }
+      addrZPY() { const a = (this.read8(this.PC) + this.Y) & 0xFF; this.PC = (this.PC + 1) & 0xFFFF; return a; }
+      addrABS() { const a = this.read16(this.PC); this.PC = (this.PC + 2) & 0xFFFF; return a; }
+      addrABX() { const b = this.read16(this.PC); this.PC = (this.PC + 2) & 0xFFFF; return (b + this.X) & 0xFFFF; }
+      addrABY() { const b = this.read16(this.PC); this.PC = (this.PC + 2) & 0xFFFF; return (b + this.Y) & 0xFFFF; }
+      addrIND() {
+        const ptr = this.read16(this.PC);
+        this.PC = (this.PC + 2) & 0xFFFF;
+        // Authentic 6502 page-boundary wrap bug on JMP ($xxFF)
+        const lo = this.read8(ptr);
+        const hi = this.read8((ptr & 0xFF00) | ((ptr + 1) & 0x00FF));
+        return (hi << 8) | lo;
+      }
+      addrIZX() {
+        const zp = (this.read8(this.PC) + this.X) & 0xFF;
+        this.PC = (this.PC + 1) & 0xFFFF;
+        const lo = this.read8(zp);
+        const hi = this.read8((zp + 1) & 0xFF);
+        return (hi << 8) | lo;
+      }
+      addrIZY() {
+        const zp = this.read8(this.PC);
+        this.PC = (this.PC + 1) & 0xFFFF;
+        const lo = this.read8(zp);
+        const hi = this.read8((zp + 1) & 0xFF);
+        return (((hi << 8) | lo) + this.Y) & 0xFFFF;
+      }
+      addrREL() {
+        let off = this.read8(this.PC);
+        this.PC = (this.PC + 1) & 0xFFFF;
+        if (off & 0x80) off -= 256;
+        return (this.PC + off) & 0xFFFF;
+      }
+
+      // Arithmetic operations with BCD Decimal support
+      opADC(val) {
+        const c = this.getFlag(0x01) ? 1 : 0;
+        if (this.getFlag(0x08)) {
+          let lo = (this.A & 0x0F) + (val & 0x0F) + c;
+          if (lo > 9) lo += 6;
+          let hi = (this.A >> 4) + (val >> 4) + (lo > 15 ? 1 : 0);
+          this.setFlag(0x02, ((this.A + val + c) & 0xFF) === 0);
+          this.setFlag(0x80, (hi & 0x08) !== 0);
+          this.setFlag(0x40, (~(this.A ^ val) & (this.A ^ (hi << 4)) & 0x80) !== 0);
+          if (hi > 9) hi += 6;
+          this.setFlag(0x01, hi > 15);
+          this.A = ((hi << 4) | (lo & 0x0F)) & 0xFF;
+        } else {
+          const sum = this.A + val + c;
+          this.setFlag(0x01, sum > 0xFF);
+          this.setFlag(0x40, (~(this.A ^ val) & (this.A ^ sum) & 0x80) !== 0);
+          this.A = sum & 0xFF;
+          this.updateZN(this.A);
+        }
+      }
+
+      opSBC(val) {
+        const c = this.getFlag(0x01) ? 0 : 1;
+        if (this.getFlag(0x08)) {
+          let lo = (this.A & 0x0F) - (val & 0x0F) - c;
+          let borrow = 0;
+          if (lo < 0) { lo += 10; borrow = 1; }
+          let hi = (this.A >> 4) - (val >> 4) - borrow;
+          if (hi < 0) { hi += 10; this.setFlag(0x01, false); }
+          else { this.setFlag(0x01, true); }
+          const diff = (this.A - val - c) & 0xFF;
+          this.setFlag(0x40, ((this.A ^ val) & (this.A ^ diff) & 0x80) !== 0);
+          this.A = ((hi << 4) | (lo & 0x0F)) & 0xFF;
+          this.updateZN(this.A);
+        } else {
+          const diff = this.A - val - c;
+          this.setFlag(0x01, diff >= 0);
+          this.setFlag(0x40, ((this.A ^ val) & (this.A ^ diff) & 0x80) !== 0);
+          this.A = diff & 0xFF;
+          this.updateZN(this.A);
+        }
+      }
+
+      opCMP(reg, val) {
+        const diff = reg - val;
+        this.setFlag(0x01, reg >= val);
+        this.updateZN(diff & 0xFF);
+      }
+
+      branch(cond, target) {
+        if (cond) {
+          this.cycles += 1;
+          this.PC = target;
+        }
+      }
+
+      buildOpcodeTable() {
+        const T = new Array(256).fill(null);
+        const set = (op, mnem, mode, cyc, fn) => {
+          T[op] = { mnem, mode, cyc, fn };
+        };
+
+        // Load / Store
+        set(0xA9, "LDA", "IMM", 2, a => { this.A = this.read8(a); this.updateZN(this.A); });
+        set(0xA5, "LDA", "ZP",  3, a => { this.A = this.read8(a); this.updateZN(this.A); });
+        set(0xB5, "LDA", "ZPX", 4, a => { this.A = this.read8(a); this.updateZN(this.A); });
+        set(0xAD, "LDA", "ABS", 4, a => { this.A = this.read8(a); this.updateZN(this.A); });
+        set(0xBD, "LDA", "ABX", 4, a => { this.A = this.read8(a); this.updateZN(this.A); });
+        set(0xB9, "LDA", "ABY", 4, a => { this.A = this.read8(a); this.updateZN(this.A); });
+        set(0xA1, "LDA", "IZX", 6, a => { this.A = this.read8(a); this.updateZN(this.A); });
+        set(0xB1, "LDA", "IZY", 5, a => { this.A = this.read8(a); this.updateZN(this.A); });
+
+        set(0xA2, "LDX", "IMM", 2, a => { this.X = this.read8(a); this.updateZN(this.X); });
+        set(0xA6, "LDX", "ZP",  3, a => { this.X = this.read8(a); this.updateZN(this.X); });
+        set(0xB6, "LDX", "ZPY", 4, a => { this.X = this.read8(a); this.updateZN(this.X); });
+        set(0xAE, "LDX", "ABS", 4, a => { this.X = this.read8(a); this.updateZN(this.X); });
+        set(0xBE, "LDX", "ABY", 4, a => { this.X = this.read8(a); this.updateZN(this.X); });
+
+        set(0xA0, "LDY", "IMM", 2, a => { this.Y = this.read8(a); this.updateZN(this.Y); });
+        set(0xA4, "LDY", "ZP",  3, a => { this.Y = this.read8(a); this.updateZN(this.Y); });
+        set(0xB4, "LDY", "ZPX", 4, a => { this.Y = this.read8(a); this.updateZN(this.Y); });
+        set(0xAC, "LDY", "ABS", 4, a => { this.Y = this.read8(a); this.updateZN(this.Y); });
+        set(0xBC, "LDY", "ABX", 4, a => { this.Y = this.read8(a); this.updateZN(this.Y); });
+
+        set(0x85, "STA", "ZP",  3, a => this.write8(a, this.A));
+        set(0x95, "STA", "ZPX", 4, a => this.write8(a, this.A));
+        set(0x8D, "STA", "ABS", 4, a => this.write8(a, this.A));
+        set(0x9D, "STA", "ABX", 5, a => this.write8(a, this.A));
+        set(0x99, "STA", "ABY", 5, a => this.write8(a, this.A));
+        set(0x81, "STA", "IZX", 6, a => this.write8(a, this.A));
+        set(0x91, "STA", "IZY", 6, a => this.write8(a, this.A));
+
+        set(0x86, "STX", "ZP",  3, a => this.write8(a, this.X));
+        set(0x96, "STX", "ZPY", 4, a => this.write8(a, this.X));
+        set(0x8E, "STX", "ABS", 4, a => this.write8(a, this.X));
+
+        set(0x84, "STY", "ZP",  3, a => this.write8(a, this.Y));
+        set(0x94, "STY", "ZPX", 4, a => this.write8(a, this.Y));
+        set(0x8C, "STY", "ABS", 4, a => this.write8(a, this.Y));
+
+        // Transfers
+        set(0xAA, "TAX", "IMP", 2, () => { this.X = this.A; this.updateZN(this.X); });
+        set(0xA8, "TAY", "IMP", 2, () => { this.Y = this.A; this.updateZN(this.Y); });
+        set(0x8A, "TXA", "IMP", 2, () => { this.A = this.X; this.updateZN(this.A); });
+        set(0x98, "TYA", "IMP", 2, () => { this.A = this.Y; this.updateZN(this.A); });
+        set(0xBA, "TSX", "IMP", 2, () => { this.X = this.SP; this.updateZN(this.X); });
+        set(0x9A, "TXS", "IMP", 2, () => { this.SP = this.X; });
+
+        // Stack
+        set(0x48, "PHA", "IMP", 3, () => this.push8(this.A));
+        set(0x08, "PHP", "IMP", 3, () => this.push8(this.P | 0x30));
+        set(0x68, "PLA", "IMP", 4, () => { this.A = this.pop8(); this.updateZN(this.A); });
+        set(0x28, "PLP", "IMP", 4, () => { this.P = (this.pop8() & ~0x10) | 0x20; });
+
+        // Logical
+        set(0x29, "AND", "IMM", 2, a => { this.A &= this.read8(a); this.updateZN(this.A); });
+        set(0x25, "AND", "ZP",  3, a => { this.A &= this.read8(a); this.updateZN(this.A); });
+        set(0x35, "AND", "ZPX", 4, a => { this.A &= this.read8(a); this.updateZN(this.A); });
+        set(0x2D, "AND", "ABS", 4, a => { this.A &= this.read8(a); this.updateZN(this.A); });
+        set(0x3D, "AND", "ABX", 4, a => { this.A &= this.read8(a); this.updateZN(this.A); });
+        set(0x39, "AND", "ABY", 4, a => { this.A &= this.read8(a); this.updateZN(this.A); });
+        set(0x21, "AND", "IZX", 6, a => { this.A &= this.read8(a); this.updateZN(this.A); });
+        set(0x31, "AND", "IZY", 5, a => { this.A &= this.read8(a); this.updateZN(this.A); });
+
+        set(0x09, "ORA", "IMM", 2, a => { this.A |= this.read8(a); this.updateZN(this.A); });
+        set(0x05, "ORA", "ZP",  3, a => { this.A |= this.read8(a); this.updateZN(this.A); });
+        set(0x15, "ORA", "ZPX", 4, a => { this.A |= this.read8(a); this.updateZN(this.A); });
+        set(0x0D, "ORA", "ABS", 4, a => { this.A |= this.read8(a); this.updateZN(this.A); });
+        set(0x1D, "ORA", "ABX", 4, a => { this.A |= this.read8(a); this.updateZN(this.A); });
+        set(0x19, "ORA", "ABY", 4, a => { this.A |= this.read8(a); this.updateZN(this.A); });
+        set(0x01, "ORA", "IZX", 6, a => { this.A |= this.read8(a); this.updateZN(this.A); });
+        set(0x11, "ORA", "IZY", 5, a => { this.A |= this.read8(a); this.updateZN(this.A); });
+
+        set(0x49, "EOR", "IMM", 2, a => { this.A ^= this.read8(a); this.updateZN(this.A); });
+        set(0x45, "EOR", "ZP",  3, a => { this.A ^= this.read8(a); this.updateZN(this.A); });
+        set(0x55, "EOR", "ZPX", 4, a => { this.A ^= this.read8(a); this.updateZN(this.A); });
+        set(0x4D, "EOR", "ABS", 4, a => { this.A ^= this.read8(a); this.updateZN(this.A); });
+        set(0x5D, "EOR", "ABX", 4, a => { this.A ^= this.read8(a); this.updateZN(this.A); });
+        set(0x59, "EOR", "ABY", 4, a => { this.A ^= this.read8(a); this.updateZN(this.A); });
+        set(0x41, "EOR", "IZX", 6, a => { this.A ^= this.read8(a); this.updateZN(this.A); });
+        set(0x51, "EOR", "IZY", 5, a => { this.A ^= this.read8(a); this.updateZN(this.A); });
+
+        const doBIT = a => {
+          const v = this.read8(a);
+          this.setFlag(0x02, (this.A & v) === 0);
+          this.setFlag(0x80, (v & 0x80) !== 0);
+          this.setFlag(0x40, (v & 0x40) !== 0);
+        };
+        set(0x24, "BIT", "ZP",  3, doBIT);
+        set(0x2C, "BIT", "ABS", 4, doBIT);
+
+        // Arithmetic
+        set(0x69, "ADC", "IMM", 2, a => this.opADC(this.read8(a)));
+        set(0x65, "ADC", "ZP",  3, a => this.opADC(this.read8(a)));
+        set(0x75, "ADC", "ZPX", 4, a => this.opADC(this.read8(a)));
+        set(0x6D, "ADC", "ABS", 4, a => this.opADC(this.read8(a)));
+        set(0x7D, "ADC", "ABX", 4, a => this.opADC(this.read8(a)));
+        set(0x79, "ADC", "ABY", 4, a => this.opADC(this.read8(a)));
+        set(0x61, "ADC", "IZX", 6, a => this.opADC(this.read8(a)));
+        set(0x71, "ADC", "IZY", 5, a => this.opADC(this.read8(a)));
+
+        set(0xE9, "SBC", "IMM", 2, a => this.opSBC(this.read8(a)));
+        set(0xE5, "SBC", "ZP",  3, a => this.opSBC(this.read8(a)));
+        set(0xF5, "SBC", "ZPX", 4, a => this.opSBC(this.read8(a)));
+        set(0xED, "SBC", "ABS", 4, a => this.opSBC(this.read8(a)));
+        set(0xFD, "SBC", "ABX", 4, a => this.opSBC(this.read8(a)));
+        set(0xF9, "SBC", "ABY", 4, a => this.opSBC(this.read8(a)));
+        set(0xE1, "SBC", "IZX", 6, a => this.opSBC(this.read8(a)));
+        set(0xF1, "SBC", "IZY", 5, a => this.opSBC(this.read8(a)));
+
+        set(0xC9, "CMP", "IMM", 2, a => this.opCMP(this.A, this.read8(a)));
+        set(0xC5, "CMP", "ZP",  3, a => this.opCMP(this.A, this.read8(a)));
+        set(0xD5, "CMP", "ZPX", 4, a => this.opCMP(this.A, this.read8(a)));
+        set(0xCD, "CMP", "ABS", 4, a => this.opCMP(this.A, this.read8(a)));
+        set(0xDD, "CMP", "ABX", 4, a => this.opCMP(this.A, this.read8(a)));
+        set(0xD9, "CMP", "ABY", 4, a => this.opCMP(this.A, this.read8(a)));
+        set(0xC1, "CMP", "IZX", 6, a => this.opCMP(this.A, this.read8(a)));
+        set(0xD1, "CMP", "IZY", 5, a => this.opCMP(this.A, this.read8(a)));
+
+        set(0xE0, "CPX", "IMM", 2, a => this.opCMP(this.X, this.read8(a)));
+        set(0xE4, "CPX", "ZP",  3, a => this.opCMP(this.X, this.read8(a)));
+        set(0xEC, "CPX", "ABS", 4, a => this.opCMP(this.X, this.read8(a)));
+
+        set(0xC0, "CPY", "IMM", 2, a => this.opCMP(this.Y, this.read8(a)));
+        set(0xC4, "CPY", "ZP",  3, a => this.opCMP(this.Y, this.read8(a)));
+        set(0xCC, "CPY", "ABS", 4, a => this.opCMP(this.Y, this.read8(a)));
+
+        // Inc / Dec
+        const doINC = a => { const v = (this.read8(a) + 1) & 0xFF; this.write8(a, v); this.updateZN(v); };
+        const doDEC = a => { const v = (this.read8(a) - 1) & 0xFF; this.write8(a, v); this.updateZN(v); };
+        set(0xE6, "INC", "ZP",  5, doINC);
+        set(0xF6, "INC", "ZPX", 6, doINC);
+        set(0xEE, "INC", "ABS", 6, doINC);
+        set(0xFE, "INC", "ABX", 7, doINC);
+
+        set(0xC6, "DEC", "ZP",  5, doDEC);
+        set(0xD6, "DEC", "ZPX", 6, doDEC);
+        set(0xCE, "DEC", "ABS", 6, doDEC);
+        set(0xDE, "DEC", "ABX", 7, doDEC);
+
+        set(0xE8, "INX", "IMP", 2, () => { this.X = (this.X + 1) & 0xFF; this.updateZN(this.X); });
+        set(0xC8, "INY", "IMP", 2, () => { this.Y = (this.Y + 1) & 0xFF; this.updateZN(this.Y); });
+        set(0xCA, "DEX", "IMP", 2, () => { this.X = (this.X - 1) & 0xFF; this.updateZN(this.X); });
+        set(0x88, "DEY", "IMP", 2, () => { this.Y = (this.Y - 1) & 0xFF; this.updateZN(this.Y); });
+
+        // Shifts & Rotates
+        const doASL = a => { const v = this.read8(a); this.setFlag(0x01, (v & 0x80) !== 0); const r = (v << 1) & 0xFF; this.write8(a, r); this.updateZN(r); };
+        set(0x0A, "ASL", "ACC", 2, () => { this.setFlag(0x01, (this.A & 0x80) !== 0); this.A = (this.A << 1) & 0xFF; this.updateZN(this.A); });
+        set(0x06, "ASL", "ZP",  5, doASL);
+        set(0x16, "ASL", "ZPX", 6, doASL);
+        set(0x0E, "ASL", "ABS", 6, doASL);
+        set(0x1E, "ASL", "ABX", 7, doASL);
+
+        const doLSR = a => { const v = this.read8(a); this.setFlag(0x01, (v & 0x01) !== 0); const r = v >> 1; this.write8(a, r); this.updateZN(r); };
+        set(0x4A, "LSR", "ACC", 2, () => { this.setFlag(0x01, (this.A & 0x01) !== 0); this.A >>= 1; this.updateZN(this.A); });
+        set(0x46, "LSR", "ZP",  5, doLSR);
+        set(0x56, "LSR", "ZPX", 6, doLSR);
+        set(0x4E, "LSR", "ABS", 6, doLSR);
+        set(0x5E, "LSR", "ABX", 7, doLSR);
+
+        const doROL = a => { const v = this.read8(a); const c = this.getFlag(0x01) ? 1 : 0; this.setFlag(0x01, (v & 0x80) !== 0); const r = ((v << 1) | c) & 0xFF; this.write8(a, r); this.updateZN(r); };
+        set(0x2A, "ROL", "ACC", 2, () => { const c = this.getFlag(0x01) ? 1 : 0; this.setFlag(0x01, (this.A & 0x80) !== 0); this.A = ((this.A << 1) | c) & 0xFF; this.updateZN(this.A); });
+        set(0x26, "ROL", "ZP",  5, doROL);
+        set(0x36, "ROL", "ZPX", 6, doROL);
+        set(0x2E, "ROL", "ABS", 6, doROL);
+        set(0x3E, "ROL", "ABX", 7, doROL);
+
+        const doROR = a => { const v = this.read8(a); const c = this.getFlag(0x01) ? 0x80 : 0; this.setFlag(0x01, (v & 0x01) !== 0); const r = (v >> 1) | c; this.write8(a, r); this.updateZN(r); };
+        set(0x6A, "ROR", "ACC", 2, () => { const c = this.getFlag(0x01) ? 0x80 : 0; this.setFlag(0x01, (this.A & 0x01) !== 0); this.A = (this.A >> 1) | c; this.updateZN(this.A); });
+        set(0x66, "ROR", "ZP",  5, doROR);
+        set(0x76, "ROR", "ZPX", 6, doROR);
+        set(0x6E, "ROR", "ABS", 6, doROR);
+        set(0x7E, "ROR", "ABX", 7, doROR);
+
+        // Jumps & Calls
+        set(0x4C, "JMP", "ABS", 3, a => { this.PC = a; });
+        set(0x6C, "JMP", "IND", 5, a => { this.PC = a; });
+        set(0x20, "JSR", "ABS", 6, a => { this.push16((this.PC - 1) & 0xFFFF); this.PC = a; });
+        set(0x60, "RTS", "IMP", 6, () => { this.PC = (this.pop16() + 1) & 0xFFFF; });
+        set(0x40, "RTI", "IMP", 6, () => { this.P = (this.pop8() & ~0x10) | 0x20; this.PC = this.pop16(); });
+
+        // Branches
+        set(0x10, "BPL", "REL", 2, a => this.branch(!this.getFlag(0x80), a));
+        set(0x30, "BMI", "REL", 2, a => this.branch( this.getFlag(0x80), a));
+        set(0x50, "BVC", "REL", 2, a => this.branch(!this.getFlag(0x40), a));
+        set(0x70, "BVS", "REL", 2, a => this.branch( this.getFlag(0x40), a));
+        set(0x90, "BCC", "REL", 2, a => this.branch(!this.getFlag(0x01), a));
+        set(0xB0, "BCS", "REL", 2, a => this.branch( this.getFlag(0x01), a));
+        set(0xD0, "BNE", "REL", 2, a => this.branch(!this.getFlag(0x02), a));
+        set(0xF0, "BEQ", "REL", 2, a => this.branch( this.getFlag(0x02), a));
+
+        // Flags & System
+        set(0x18, "CLC", "IMP", 2, () => this.setFlag(0x01, false));
+        set(0x38, "SEC", "IMP", 2, () => this.setFlag(0x01, true));
+        set(0x58, "CLI", "IMP", 2, () => this.setFlag(0x04, false));
+        set(0x78, "SEI", "IMP", 2, () => this.setFlag(0x04, true));
+        set(0xB8, "CLV", "IMP", 2, () => this.setFlag(0x40, false));
+        set(0xD8, "CLD", "IMP", 2, () => this.setFlag(0x08, false));
+        set(0xF8, "SED", "IMP", 2, () => this.setFlag(0x08, true));
+        set(0xEA, "NOP", "IMP", 2, () => {});
+
+        set(0x00, "BRK", "IMP", 7, () => {
+          this.PC = (this.PC + 1) & 0xFFFF;
+          this.push16(this.PC);
+          this.push8(this.P | 0x30);
+          this.setFlag(0x04, true);
+          this.PC = this.read16(0xFFFE);
+        });
+
+        // Special ROM Trap ($02) used by OSI BASIC ROM entry point ($A000)
+        set(0x02, "BAS", "IMP", 4, () => {
+          if (this.bus.onBasicTrap) {
+            this.bus.onBasicTrap();
+          }
+        });
+
+        this.opcodes = T;
+      }
+
+      step() {
+        const op = this.read8(this.PC);
+        this.PC = (this.PC + 1) & 0xFFFF;
+        const inst = this.opcodes[op];
+        if (!inst) {
+          // Treat unknown/undocumented opcodes as 2-cycle NOP for resilience
+          this.cycles += 2;
+          return 2;
+        }
+        let addr = 0;
+        switch (inst.mode) {
+          case "IMM": addr = this.addrIMM(); break;
+          case "ZP":  addr = this.addrZP();  break;
+          case "ZPX": addr = this.addrZPX(); break;
+          case "ZPY": addr = this.addrZPY(); break;
+          case "ABS": addr = this.addrABS(); break;
+          case "ABX": addr = this.addrABX(); break;
+          case "ABY": addr = this.addrABY(); break;
+          case "IND": addr = this.addrIND(); break;
+          case "IZX": addr = this.addrIZX(); break;
+          case "IZY": addr = this.addrIZY(); break;
+          case "REL": addr = this.addrREL(); break;
+          default: break;
+        }
+        inst.fn(addr);
+        this.cycles += inst.cyc;
+        return inst.cyc;
+      }
+
+      // Disassembles a single instruction at `addr` for the debugger view
+      disassembleAt(addr) {
+        const op = this.read8(addr);
+        const inst = this.opcodes[op];
+        const hex2 = v => v.toString(16).toUpperCase().padStart(2, "0");
+        const hex4 = v => v.toString(16).toUpperCase().padStart(4, "0");
+        if (!inst) {
+          return { text: `$${hex4(addr)}: ${hex2(op)}        .BYTE $${hex2(op)}`, next: (addr + 1) & 0xFFFF };
+        }
+        const b1 = this.read8((addr + 1) & 0xFFFF);
+        const b2 = this.read8((addr + 2) & 0xFFFF);
+        const w = (b2 << 8) | b1;
+        let bytesStr = `${hex2(op)}`;
+        let operand = "";
+        let len = 1;
+
+        switch (inst.mode) {
+          case "IMP": operand = ""; break;
+          case "ACC": operand = "A"; break;
+          case "IMM": len = 2; bytesStr += ` ${hex2(b1)}`; operand = `#$${hex2(b1)}`; break;
+          case "ZP":  len = 2; bytesStr += ` ${hex2(b1)}`; operand = `$${hex2(b1)}`; break;
+          case "ZPX": len = 2; bytesStr += ` ${hex2(b1)}`; operand = `$${hex2(b1)},X`; break;
+          case "ZPY": len = 2; bytesStr += ` ${hex2(b1)}`; operand = `$${hex2(b1)},Y`; break;
+          case "IZX": len = 2; bytesStr += ` ${hex2(b1)}`; operand = `($${hex2(b1)},X)`; break;
+          case "IZY": len = 2; bytesStr += ` ${hex2(b1)}`; operand = `($${hex2(b1)}),Y`; break;
+          case "REL": {
+            len = 2;
+            bytesStr += ` ${hex2(b1)}`;
+            const off = (b1 & 0x80) ? b1 - 256 : b1;
+            const target = (addr + 2 + off) & 0xFFFF;
+            operand = `$${hex4(target)}`;
+            break;
+          }
+          case "ABS": len = 3; bytesStr += ` ${hex2(b1)} ${hex2(b2)}`; operand = `$${hex4(w)}`; break;
+          case "ABX": len = 3; bytesStr += ` ${hex2(b1)} ${hex2(b2)}`; operand = `$${hex4(w)},X`; break;
+          case "ABY": len = 3; bytesStr += ` ${hex2(b1)} ${hex2(b2)}`; operand = `$${hex4(w)},Y`; break;
+          case "IND": len = 3; bytesStr += ` ${hex2(b1)} ${hex2(b2)}`; operand = `($${hex4(w)})`; break;
+        }
+        return {
+          text: `$${hex4(addr)}: ${bytesStr.padEnd(9, " ")} ${inst.mnem} ${operand}`.trimEnd(),
+          next: (addr + len) & 0xFFFF
+        };
+      }
+    }
+
+    /**
+     * ============================================================================
+     * SECTION 3: TWO-PASS 6502 MINI-ASSEMBLER
+     * ============================================================================
+     * Used both to assemble our authentic SYN600 System Monitor ROM ($F800-$FFFF)
+     * and to allow users to assemble 6502 code directly into RAM.
+     */
+    function assemble6502(source, origin = 0x0200) {
+      const OPCODE_MAP = {
+        ADC: { IMM:0x69, ZP:0x65, ZPX:0x75, ABS:0x6D, ABX:0x7D, ABY:0x79, IZX:0x61, IZY:0x71 },
+        AND: { IMM:0x29, ZP:0x25, ZPX:0x35, ABS:0x2D, ABX:0x3D, ABY:0x39, IZX:0x21, IZY:0x31 },
+        ASL: { ACC:0x0A, ZP:0x06, ZPX:0x16, ABS:0x0E, ABX:0x1E },
+        BCC: { REL:0x90 }, BCS: { REL:0xB0 }, BEQ: { REL:0xF0 }, BMI: { REL:0x30 },
+        BNE: { REL:0xD0 }, BPL: { REL:0x10 }, BVC: { REL:0x50 }, BVS: { REL:0x70 },
+        BIT: { ZP:0x24, ABS:0x2C },
+        BRK: { IMP:0x00 },
+        CLC: { IMP:0x18 }, CLD: { IMP:0xD8 }, CLI: { IMP:0x58 }, CLV: { IMP:0xB8 },
+        CMP: { IMM:0xC9, ZP:0xC5, ZPX:0xD5, ABS:0xCD, ABX:0xDD, ABY:0xD9, IZX:0xC1, IZY:0xD1 },
+        CPX: { IMM:0xE0, ZP:0xE4, ABS:0xEC },
+        CPY: { IMM:0xC0, ZP:0xC4, ABS:0xCC },
+        DEC: { ZP:0xC6, ZPX:0xD6, ABS:0xCE, ABX:0xDE },
+        DEX: { IMP:0xCA }, DEY: { IMP:0x88 },
+        EOR: { IMM:0x49, ZP:0x45, ZPX:0x55, ABS:0x4D, ABX:0x5D, ABY:0x59, IZX:0x41, IZY:0x51 },
+        INC: { ZP:0xE6, ZPX:0xF6, ABS:0xEE, ABX:0xFE },
+        INX: { IMP:0xE8 }, INY: { IMP:0xC8 },
+        JMP: { ABS:0x4C, IND:0x6C },
+        JSR: { ABS:0x20 },
+        LDA: { IMM:0xA9, ZP:0xA5, ZPX:0xB5, ABS:0xAD, ABX:0xBD, ABY:0xB9, IZX:0xA1, IZY:0xB1 },
+        LDX: { IMM:0xA2, ZP:0xA6, ZPY:0xB6, ABS:0xAE, ABY:0xBE },
+        LDY: { IMM:0xA0, ZP:0xA4, ZPX:0xB4, ABS:0xAC, ABX:0xBC },
+        LSR: { ACC:0x4A, ZP:0x46, ZPX:0x56, ABS:0x4E, ABX:0x5E },
+        NOP: { IMP:0xEA },
+        ORA: { IMM:0x09, ZP:0x05, ZPX:0x15, ABS:0x0D, ABX:0x1D, ABY:0x19, IZX:0x01, IZY:0x11 },
+        PHA: { IMP:0x48 }, PHP: { IMP:0x08 }, PLA: { IMP:0x68 }, PLP: { IMP:0x28 },
+        ROL: { ACC:0x2A, ZP:0x26, ZPX:0x36, ABS:0x2E, ABX:0x3E },
+        ROR: { ACC:0x6A, ZP:0x66, ZPX:0x76, ABS:0x6E, ABX:0x7E },
+        RTI: { IMP:0x40 }, RTS: { IMP:0x60 },
+        SBC: { IMM:0xE9, ZP:0xE5, ZPX:0xF5, ABS:0xED, ABX:0xFD, ABY:0xF9, IZX:0xE1, IZY:0xF1 },
+        SEC: { IMP:0x38 }, SED: { IMP:0xF8 }, SEI: { IMP:0x78 },
+        STA: { ZP:0x85, ZPX:0x95, ABS:0x8D, ABX:0x9D, ABY:0x99, IZX:0x81, IZY:0x91 },
+        STX: { ZP:0x86, ZPY:0x96, ABS:0x8E },
+        STY: { ZP:0x84, ZPX:0x94, ABS:0x8C },
+        TAX: { IMP:0xAA }, TAY: { IMP:0xA8 }, TSX: { IMP:0xBA },
+        TXA: { IMP:0x8A }, TXS: { IMP:0x9A }, TYA: { IMP:0x98 }
+      };
+
+      const labels = {};
+      const lines = source.split(/\r?\n/);
+
+      const parseNum = (tok) => {
+        tok = tok.trim();
+        if (labels[tok.toUpperCase()] !== undefined) return labels[tok.toUpperCase()];
+        if (tok.startsWith("$")) return parseInt(tok.slice(1), 16);
+        if (tok.startsWith("0X") || tok.startsWith("0x")) return parseInt(tok.slice(2), 16);
+        if (tok.startsWith("%")) return parseInt(tok.slice(1), 2);
+        if (/^'.'$/.test(tok)) return tok.charCodeAt(1);
+        if (/^-?\d+$/.test(tok)) return parseInt(tok, 10);
+        return NaN;
+      };
+
+      const parseLine = (rawLine, pass, pc) => {
+        // Strip comments
+        let line = rawLine.split(";")[0].trim();
+        if (!line) return { bytes: [], newPc: pc };
+
+        // Check label definition
+        const colonIdx = line.indexOf(":");
+        if (colonIdx !== -1) {
+          const lbl = line.slice(0, colonIdx).trim().toUpperCase();
+          if (pass === 1) labels[lbl] = pc;
+          line = line.slice(colonIdx + 1).trim();
+          if (!line) return { bytes: [], newPc: pc };
+        }
+
+        // Directives (.ORG, .BYTE, .ASCII)
+        const parts = line.match(/^([.\w]+)\s*(.*)$/);
+        if (!parts) throw new Error(`Syntax error: ${rawLine}`);
+        const mnem = parts[1].toUpperCase();
+        const arg = parts[2].trim();
+
+        if (mnem === ".ORG" || mnem === "ORG") {
+          const val = parseNum(arg);
+          if (isNaN(val)) throw new Error(`Invalid ORG address: ${arg}`);
+          return { bytes: [], newPc: val & 0xFFFF };
+        }
+
+        if (mnem === ".BYTE" || mnem === "DB") {
+          const items = arg.split(",").map(s => s.trim()).filter(Boolean);
+          const bytes = [];
+          for (const it of items) {
+            if (it.startsWith('"') && it.endsWith('"')) {
+              for (let i = 1; i < it.length - 1; i++) bytes.push(it.charCodeAt(i) & 0xFF);
+            } else {
+              const v = parseNum(it);
+              bytes.push((isNaN(v) ? 0 : v) & 0xFF);
+            }
+          }
+          return { bytes, newPc: (pc + bytes.length) & 0xFFFF };
+        }
+
+        const modes = OPCODE_MAP[mnem];
+        if (!modes) throw new Error(`Unknown mnemonic: ${mnem}`);
+
+        // Determine addressing mode
+        let mode = "IMP";
+        let val = 0;
+
+        if (!arg) {
+          mode = "IMP";
+        } else if (arg.toUpperCase() === "A" && modes.ACC !== undefined) {
+          mode = "ACC";
+        } else if (arg.startsWith("#")) {
+          mode = "IMM";
+          val = parseNum(arg.slice(1));
+        } else if (/^\((.+),\s*X\)$/i.test(arg)) {
+          mode = "IZX";
+          val = parseNum(RegExp.$1);
+        } else if (/^\((.+)\),\s*Y$/i.test(arg)) {
+          mode = "IZY";
+          val = parseNum(RegExp.$1);
+        } else if (/^\((.+)\)$/.test(arg)) {
+          mode = "IND";
+          val = parseNum(RegExp.$1);
+        } else if (/^(.+),\s*X$/i.test(arg)) {
+          val = parseNum(RegExp.$1);
+          const isExplicitZP = RegExp.$1.trim().startsWith("$") && RegExp.$1.trim().length <= 3;
+          mode = (isExplicitZP || (!isNaN(val) && val >= 0 && val <= 0xFF && modes.ZPX !== undefined && !RegExp.$1.trim().startsWith("$00"))) ? "ZPX" : "ABX";
+          if (modes[mode] === undefined) mode = modes.ABX !== undefined ? "ABX" : "ZPX";
+        } else if (/^(.+),\s*Y$/i.test(arg)) {
+          val = parseNum(RegExp.$1);
+          const isExplicitZP = RegExp.$1.trim().startsWith("$") && RegExp.$1.trim().length <= 3;
+          mode = (isExplicitZP || (!isNaN(val) && val >= 0 && val <= 0xFF && modes.ZPY !== undefined)) ? "ZPY" : "ABY";
+          if (modes[mode] === undefined) mode = modes.ABY !== undefined ? "ABY" : "ZPY";
+        } else {
+          val = parseNum(arg);
+          if (modes.REL !== undefined) {
+            mode = "REL";
+          } else {
+            const rawTok = arg.trim();
+            const isLabel = labels[rawTok.toUpperCase()] !== undefined || !/^[0-9$%]/.test(rawTok);
+            if (!isLabel && !isNaN(val) && val >= 0 && val <= 0xFF && modes.ZP !== undefined && rawTok.length <= 3) {
+              mode = "ZP";
+            } else {
+              mode = modes.ABS !== undefined ? "ABS" : "ZP";
+            }
+          }
+        }
+
+        const opcode = modes[mode];
+        if (opcode === undefined) {
+          throw new Error(`Invalid addressing mode ${mode} for ${mnem}`);
+        }
+
+        if (mode === "IMP" || mode === "ACC") {
+          return { bytes: [opcode], newPc: (pc + 1) & 0xFFFF };
+        }
+        if (mode === "IMM" || mode === "ZP" || mode === "ZPX" || mode === "ZPY" || mode === "IZX" || mode === "IZY") {
+          return { bytes: [opcode, (isNaN(val) ? 0 : val) & 0xFF], newPc: (pc + 2) & 0xFFFF };
+        }
+        if (mode === "REL") {
+          let rel = 0;
+          if (pass === 2) {
+            if (isNaN(val)) throw new Error(`Unresolved branch label: ${arg}`);
+            rel = val - (pc + 2);
+            if (rel < -128 || rel > 127) throw new Error(`Branch out of range (${rel}) at $${pc.toString(16)}`);
+          }
+          return { bytes: [opcode, rel & 0xFF], newPc: (pc + 2) & 0xFFFF };
+        }
+        // ABS, ABX, ABY, IND
+        if (pass === 2 && isNaN(val)) throw new Error(`Unresolved symbol: ${arg}`);
+        const w = (isNaN(val) ? 0 : val) & 0xFFFF;
+        return { bytes: [opcode, w & 0xFF, (w >> 8) & 0xFF], newPc: (pc + 3) & 0xFFFF };
+      };
+
+      // Pass 1: collect labels
+      let pc = origin & 0xFFFF;
+      for (const line of lines) {
+        const res = parseLine(line, 1, pc);
+        pc = res.newPc;
+      }
+
+      // Pass 2: emit bytes
+      const segments = [];
+      pc = origin & 0xFFFF;
+      let curSeg = { addr: pc, bytes: [] };
+      for (const line of lines) {
+        const res = parseLine(line, 2, pc);
+        if (res.bytes.length === 0 && res.newPc !== pc) {
+          if (curSeg.bytes.length > 0) segments.push(curSeg);
+          curSeg = { addr: res.newPc, bytes: [] };
+        } else if (res.bytes.length > 0) {
+          curSeg.bytes.push(...res.bytes);
+        }
+        pc = res.newPc;
+      }
+      if (curSeg.bytes.length > 0) segments.push(curSeg);
+      return segments;
+    }
+
+    /**
+     * ============================================================================
+     * SECTION 4: SUPERBOARD II HARDWARE BUS & 8x8 KEYBOARD MATRIX ($DF00)
+     * ============================================================================
+     */
+    const KEYBOARD_LAYOUT = [
+      // Row 0: Numbers & Symbols
+      [
+        { id: "1", label: "1", shift: "!", row: 0, col: 0, style: "white" },
+        { id: "2", label: "2", shift: "\"", row: 0, col: 1, style: "white" },
+        { id: "3", label: "3", shift: "#", row: 0, col: 2, style: "white" },
+        { id: "4", label: "4", shift: "$", row: 0, col: 3, style: "white" },
+        { id: "5", label: "5", shift: "%", row: 0, col: 4, style: "white" },
+        { id: "6", label: "6", shift: "&", row: 0, col: 5, style: "white" },
+        { id: "7", label: "7", shift: "'", row: 0, col: 6, style: "white" },
+        { id: "8", label: "8", shift: "(", row: 0, col: 7, style: "white" },
+        { id: "9", label: "9", shift: ")", row: 1, col: 0, style: "white" },
+        { id: "0", label: "0", shift: "@", row: 1, col: 1, style: "white" },
+        { id: ":", label: ":", shift: "*", row: 1, col: 2, style: "white" },
+        { id: "-", label: "-", shift: "=", row: 1, col: 3, style: "white" },
+        { id: "RUBOUT", label: "RUB OUT", row: 1, col: 4, style: "dark", wide: "w-14 sm:w-16" }
+      ],
+      // Row 1: ESC, QWERTYUIOP, RETURN
+      [
+        { id: "ESC", label: "ESC", row: 1, col: 5, style: "dark", wide: "w-11 sm:w-12" },
+        { id: "Q", label: "Q", row: 1, col: 6, style: "white" },
+        { id: "W", label: "W", row: 1, col: 7, style: "white" },
+        { id: "E", label: "E", row: 2, col: 0, style: "white" },
+        { id: "R", label: "R", row: 2, col: 1, style: "white" },
+        { id: "T", label: "T", row: 2, col: 2, style: "white" },
+        { id: "Y", label: "Y", row: 2, col: 3, style: "white" },
+        { id: "U", label: "U", row: 2, col: 4, style: "white" },
+        { id: "I", label: "I", row: 2, col: 5, style: "white" },
+        { id: "O", label: "O", row: 2, col: 6, style: "white" },
+        { id: "P", label: "P", row: 2, col: 7, style: "white" },
+        { id: "RETURN", label: "RETURN", row: 4, col: 2, style: "dark", wide: "w-16 sm:w-20" }
+      ],
+      // Row 2: CTRL, ASDFGHJKL;, LF
+      [
+        { id: "CTRL", label: "CTRL", row: 6, col: 3, style: "dark", wide: "w-12 sm:w-14" },
+        { id: "A", label: "A", row: 3, col: 0, style: "white" },
+        { id: "S", label: "S", row: 3, col: 1, style: "white" },
+        { id: "D", label: "D", row: 3, col: 2, style: "white" },
+        { id: "F", label: "F", row: 3, col: 3, style: "white" },
+        { id: "G", label: "G", row: 3, col: 4, style: "white" },
+        { id: "H", label: "H", row: 3, col: 5, style: "white" },
+        { id: "J", label: "J", row: 3, col: 6, style: "white" },
+        { id: "K", label: "K", row: 3, col: 7, style: "white" },
+        { id: "L", label: "L", row: 4, col: 0, style: "white" },
+        { id: ";", label: ";", shift: "+", row: 4, col: 1, style: "white" },
+        { id: "LF", label: "LINE FEED", row: 5, col: 6, style: "dark", wide: "w-14 sm:w-16" }
+      ],
+      // Row 3: SHIFT LOCK, SHIFT, ZXCVBNM,./, SHIFT, REPEAT
+      [
+        { id: "SHIFTLOCK", label: "SHIFT LOCK", row: 6, col: 2, style: "dark", latch: true, wide: "w-14 sm:w-16" },
+        { id: "LSHIFT", label: "SHIFT", row: 6, col: 0, style: "dark", wide: "w-12 sm:w-14" },
+        { id: "Z", label: "Z", row: 4, col: 3, style: "white" },
+        { id: "X", label: "X", row: 4, col: 4, style: "white" },
+        { id: "C", label: "C", row: 4, col: 5, style: "white" },
+        { id: "V", label: "V", row: 4, col: 6, style: "white" },
+        { id: "B", label: "B", row: 4, col: 7, style: "white" },
+        { id: "N", label: "N", row: 5, col: 0, style: "white" },
+        { id: "M", label: "M", row: 5, col: 1, style: "white" },
+        { id: ",", label: ",", shift: "<", row: 5, col: 2, style: "white" },
+        { id: ".", label: ".", shift: ">", row: 5, col: 3, style: "white" },
+        { id: "/", label: "/", shift: "?", row: 5, col: 4, style: "white" },
+        { id: "RSHIFT", label: "SHIFT", row: 6, col: 1, style: "dark", wide: "w-12 sm:w-14" },
+        { id: "REPEAT", label: "REPEAT", row: 5, col: 7, style: "dark", wide: "w-12 sm:w-14" }
+      ],
+      // Row 4: Cursor Arrows, SPACE BAR, BREAK
+      [
+        { id: "LEFT", label: "←", row: 6, col: 6, style: "dark" },
+        { id: "RIGHT", label: "→", row: 6, col: 7, style: "dark" },
+        { id: "SPACE", label: "SPACE", row: 5, col: 5, style: "white", wide: "flex-1 min-w-[140px] max-w-[290px]" },
+        { id: "UP", label: "↑", row: 6, col: 4, style: "dark" },
+        { id: "DOWN", label: "↓", row: 6, col: 5, style: "dark" },
+        { id: "BREAK", label: "BREAK", row: 7, col: 0, style: "red", wide: "w-14 sm:w-16" }
+      ]
+    ];
+
+    class SuperboardHardware {
+      constructor(audioEngine) {
+        this.audio = audioEngine;
+        this.mem = new Uint8Array(65536); // Full 64KB address space
+        this.ramTop = 0x8000;              // 32KB RAM ($0000-$7FFF)
+        this.videoDirty = true;
+
+        // 8x8 Polled Keyboard Matrix state ($DF00)
+        this.matrix = new Uint8Array(8);   // Active-high internal pressed bits per row
+        this.kbRowLatch = 0xFF;            // Active-low row mask written to $DF00
+        this.shiftLock = true;             // Superboard II boots with SHIFT LOCK engaged!
+        this.matrix[6] |= (1 << 2);        // Latch SHIFT LOCK bit in row 6 col 2
+
+        // High-level ASCII character input FIFO queue for Monitor & BASIC
+        this.charQueue = [];
+
+        // Screen viewport configuration ('32x32' or '24x24')
+        this.screenMode = "32x32";
+
+        // Install 6502 Monitor ROM ($F800-$FFFF) and BASIC ROM vector ($A000)
+        this.installSystemROM();
+      }
+
+      /**
+       * Assembles genuine 6502 machine code into $F800-$FFFF for the SYN600
+       * System Monitor ROM! This runs natively on the 6502 CPU at boot and
+       * whenever the user enters 'M' (Machine Language Monitor).
+       */
+      installSystemROM() {
+        // Fill ROM areas with $FF
+        this.mem.fill(0xFF, 0xA000, 0xC000);
+        this.mem.fill(0xFF, 0xF800, 0x10000);
+
+        // Place BASIC ROM Trap ($02) at $A000 (Cold) and $A003 (Warm)
+        this.mem[0xA000] = 0x02;
+        this.mem[0xA003] = 0x02;
+
+        // Authentic 6502 SYN600 Monitor ROM assembled at $F800
+        const monitorAsm = `
+          .ORG $F800
+          RESET:
+            LDX #$FF
+            TXS
+            CLD
+            SEI
+            LDA #$FF
+            STA $DF00
+            JSR CLRSCR
+            ; Print "D/C/W/M ?" on screen at $D042
+            LDX #$00
+          BOOTMSG:
+            LDA PROMPT_STR,X
+            BEQ BOOTLOOP
+            STA $D042,X
+            INX
+            BNE BOOTMSG
+          BOOTLOOP:
+            JSR GETKEY
+            CMP #$43        ; 'C' -> Cold BASIC
+            BEQ GOCOLD
+            CMP #$57        ; 'W' -> Warm BASIC
+            BEQ GOWARM
+            CMP #$4D        ; 'M' -> Machine Language Monitor
+            BEQ MONITOR
+            CMP #$44        ; 'D' -> Disk boot (no drive -> loop)
+            BEQ BOOTLOOP
+            JMP BOOTLOOP
+
+          GOCOLD:
+            LDA #$01
+            STA $00FE
+            JMP $A000
+
+          GOWARM:
+            LDA #$02
+            STA $00FE
+            JMP $A003
+
+          ; Clear 1KB Video RAM ($D000-$D3FF) with spaces ($20)
+          CLRSCR:
+            LDA #$20
+            LDX #$00
+          CLRLP:
+            STA $D000,X
+            STA $D100,X
+            STA $D200,X
+            STA $D300,X
+            INX
+            BNE CLRLP
+            RTS
+
+          ; Poll keyboard matrix ($DF00) & read queued ASCII key into A
+          GETKEY:
+            LDA #$FE
+            STA $DF00
+            LDA $DF00
+            LDA $00FF
+            BEQ GETKEY
+            LDX #$00
+            STX $00FF
+            RTS
+
+          ; --------------------------------------------------------
+          ; 6502 MACHINE LANGUAGE MONITOR (Entered via 'M')
+          ; Zero Page: $FB/$FC = Current Address Pointer
+          ;            $FD     = Temp byte / mode
+          ; --------------------------------------------------------
+          MONITOR:
+            JSR CLRSCR
+            LDX #$00
+          MONHDR:
+            LDA MON_STR,X
+            BEQ MONINIT
+            STA $D021,X
+            INX
+            BNE MONHDR
+          MONINIT:
+            LDA #$00
+            STA $FB
+            LDA #$02
+            STA $FC         ; Default address = $0200
+            JSR SHOWLINE
+
+          MONCMD:
+            JSR GETKEY
+            CMP #$2E        ; '.' -> Set 4-digit hex address
+            BEQ SETADDR
+            CMP #$2F        ; '/' -> Data entry mode
+            BEQ DATAENTRY
+            CMP #$47        ; 'G' -> Go (execute at ($FB))
+            BEQ GOCODE
+            CMP #$4C        ; 'L' -> List 16 bytes
+            BEQ LISTMEM
+            CMP #$52        ; 'R' -> Reset to boot prompt
+            BEQ DO_RESET
+            CMP #$0D        ; Enter -> Next byte
+            BEQ NEXTBYTE
+            JMP MONCMD
+
+          DO_RESET:
+            JMP RESET
+
+          NEXTBYTE:
+            INC $FB
+            BNE NB1
+            INC $FC
+          NB1:
+            JSR SHOWLINE
+            JMP MONCMD
+
+          SETADDR:
+            LDA #$2E
+            STA $D0A1
+            JSR READHEX
+            STA $FC
+            JSR READHEX
+            STA $FB
+            JSR SHOWLINE
+            JMP MONCMD
+
+          DATAENTRY:
+            LDA #$2F
+            STA $D0A6
+          DATALOOP:
+            JSR GETKEY
+            CMP #$2E        ; '.' exits data entry to address mode
+            BEQ SETADDR
+            CMP #$52        ; 'R' resets
+            BEQ DO_RESET
+            CMP #$47        ; 'G' runs
+            BEQ GOCODE
+            CMP #$20        ; Ignore spaces
+            BEQ DATALOOP
+            CMP #$0D        ; Enter advances
+            BEQ NEXTBYTE
+            JSR HEXNIB
+            BMI DATALOOP
+            ASL A
+            ASL A
+            ASL A
+            ASL A
+            STA $FD
+          DATA2:
+            JSR GETKEY
+            JSR HEXNIB
+            BMI DATA2
+            ORA $FD
+            LDY #$00
+            STA ($FB),Y
+            JSR SHOWLINE
+            INC $FB
+            BNE DL1
+            INC $FC
+          DL1:
+            JSR SHOWLINE
+            JMP DATALOOP
+
+          GOCODE:
+            JSR CALLPTR
+            JSR SHOWLINE
+            JMP MONCMD
+
+          CALLPTR:
+            JMP ($00FB)
+
+          LISTMEM:
+            LDY #$00
+          LSTLP:
+            LDA ($FB),Y
+            TYA
+            PHA
+            LDA ($FB),Y
+            JSR OUTHEX_Y
+            PLA
+            TAY
+            INY
+            CPY #$10
+            BNE LSTLP
+            JMP MONCMD
+
+          ; Display current address ($FC:$FB) and byte ($FB),Y at $D0A2
+          SHOWLINE:
+            LDA #$20
+            STA $D0A1
+            STA $D0A6
+            LDA $FC
+            LDX #$02
+            JSR OUTHEX
+            LDA $FB
+            LDX #$04
+            JSR OUTHEX
+            LDY #$00
+            LDA ($FB),Y
+            LDX #$07
+            JSR OUTHEX
+            RTS
+
+          ; Read 2 hex ASCII chars and return byte in A
+          READHEX:
+            JSR GETKEY
+            JSR HEXNIB
+            BMI READHEX
+            ASL A
+            ASL A
+            ASL A
+            ASL A
+            STA $FD
+          RH2:
+            JSR GETKEY
+            JSR HEXNIB
+            BMI RH2
+            ORA $FD
+            RTS
+
+          ; Convert ASCII hex char in A to 0..15 (or $80 if invalid)
+          HEXNIB:
+            CMP #$30
+            BCC HEXBAD
+            CMP #$3A
+            BCC HEXDIG
+            CMP #$41
+            BCC HEXBAD
+            CMP #$47
+            BCS HEXBAD
+            SEC
+            SBC #$37
+            RTS
+          HEXDIG:
+            SEC
+            SBC #$30
+            RTS
+          HEXBAD:
+            LDA #$80
+            RTS
+
+          ; Print byte in A as 2 hex chars at $D0A0 + X
+          OUTHEX:
+            PHA
+            LSR A
+            LSR A
+            LSR A
+            LSR A
+            JSR NIBASC
+            STA $D0A0,X
+            INX
+            PLA
+            AND #$0F
+            JSR NIBASC
+            STA $D0A0,X
+            RTS
+
+          ; Print byte in A at $D0E1 + Y*3
+          OUTHEX_Y:
+            PHA
+            TYA
+            ASL A
+            CLC
+            ADC $FD
+            TAX
+            PLA
+            PHA
+            LSR A
+            LSR A
+            LSR A
+            LSR A
+            JSR NIBASC
+            STA $D0E1,Y
+            PLA
+            AND #$0F
+            JSR NIBASC
+            STA $D101,Y
+            RTS
+
+          NIBASC:
+            CMP #$0A
+            BCC NA1
+            CLC
+            ADC #$07
+          NA1:
+            ADC #$30
+            RTS
+
+          PROMPT_STR:
+            .BYTE "D/C/W/M ?", 0
+          MON_STR:
+            .BYTE "6502 MONITOR (.ADDR /DATA G L R)", 0
+        `;
+
+        const segs = assemble6502(monitorAsm, 0xF800);
+        for (const seg of segs) {
+          for (let i = 0; i < seg.bytes.length; i++) {
+            this.mem[(seg.addr + i) & 0xFFFF] = seg.bytes[i];
+          }
+        }
+
+        // Set 6502 Hardware Vectors at $FFFA-$FFFF
+        // NMI -> $F800 (Reset), RESET -> $F800, IRQ/BRK -> $F800
+        this.mem[0xFFFA] = 0x00; this.mem[0xFFFB] = 0xF8;
+        this.mem[0xFFFC] = 0x00; this.mem[0xFFFD] = 0xF8;
+        this.mem[0xFFFE] = 0x00; this.mem[0xFFFF] = 0xF8;
+      }
+
+      read(addr) {
+        addr &= 0xFFFF;
+        // $DF00: 8x8 Keyboard Matrix Column Read (Active-Low)
+        if (addr === 0xDF00) {
+          let activeCols = 0x00;
+          for (let r = 0; r < 8; r++) {
+            // In OSI Superboard II, a 0 bit in kbRowLatch selects that row
+            if ((this.kbRowLatch & (1 << r)) === 0) {
+              activeCols |= this.matrix[r];
+            }
+          }
+          // Return active-low column lines (0 = key pressed, 1 = open)
+          return (~activeCols) & 0xFF;
+        }
+        return this.mem[addr];
+      }
+
+      write(addr, val) {
+        addr &= 0xFFFF;
+        val &= 0xFF;
+
+        // $0000-$7FFF: User RAM (32KB)
+        if (addr < this.ramTop) {
+          this.mem[addr] = val;
+          return;
+        }
+
+        // $D000-$D3FF: 1KB Memory-Mapped Video RAM
+        if (addr >= 0xD000 && addr <= 0xD3FF) {
+          if (this.mem[addr] !== val) {
+            this.mem[addr] = val;
+            this.videoDirty = true;
+          }
+          return;
+        }
+
+        // $DF00: 8x8 Keyboard Matrix Row Latch
+        if (addr === 0xDF00) {
+          this.kbRowLatch = val;
+          return;
+        }
+
+        // $DF01: Optional OSI Sound DAC / Speaker Toggle
+        if (addr === 0xDF01) {
+          this.mem[addr] = val;
+          if (this.audio) this.audio.dacPulse(val);
+          return;
+        }
+
+        // Writes to ROM ($A000-$BFFF, $F800-$FFFF) are ignored by hardware
+      }
+
+      setKeyMatrixState(row, col, isDown) {
+        if (row < 0 || row > 7 || col < 0 || col > 7) return;
+        if (isDown) {
+          this.matrix[row] |= (1 << col);
+        } else {
+          this.matrix[row] &= ~(1 << col);
+        }
+      }
+
+      toggleShiftLock() {
+        this.shiftLock = !this.shiftLock;
+        this.setKeyMatrixState(6, 2, this.shiftLock);
+        return this.shiftLock;
+      }
+
+      enqueueAscii(code) {
+        this.charQueue.push(code & 0xFF);
+        // Feed zero-page mailbox $00FF for 6502 Monitor ROM polling
+        if (this.mem[0x00FF] === 0 && this.charQueue.length > 0) {
+          this.mem[0x00FF] = this.charQueue.shift();
+        }
+      }
+
+      pumpMailbox() {
+        if (this.mem[0x00FF] === 0 && this.charQueue.length > 0) {
+          this.mem[0x00FF] = this.charQueue.shift();
+        }
+      }
+
+      popAscii() {
+        if (this.mem[0x00FF] !== 0) {
+          const c = this.mem[0x00FF];
+          this.mem[0x00FF] = 0;
+          this.pumpMailbox();
+          return c;
+        }
+        if (this.charQueue.length > 0) {
+          return this.charQueue.shift();
+        }
+        return 0;
+      }
+    }
+
+    /**
+     * ============================================================================
+     * SECTION 5: OHIO SCIENTIFIC 8K MICROSOFT 6502 BASIC INTERPRETER
+     * ============================================================================
+     * Runs when the user boots BASIC via 'C' (Cold Start) or 'W' (Warm Start).
+     * Writes directly to $D000-$D3FF Video RAM, polls $DF00 / keyboard queue,
+     * stores program lines in 6502 RAM ($0300+), supports PEEK/POKE, and executes
+     * real 6502 machine code subroutines via SYS addr and USR(x)!
+     */
+    class OSIBasicInterpreter {
+      constructor(hw, cpu) {
+        this.hw = hw;
+        this.cpu = cpu;
+        this.active = false;
+
+        // Screen cursor state mapped onto $D000-$D3FF
+        this.cursorX = 0;
+        this.cursorY = 0;
+
+        // BASIC state
+        this.bootStage = "IDLE"; // 'MEMSIZE', 'WIDTH', 'PROMPT', 'INPUT', 'RUNNING'
+        this.inputBuffer = "";
+        this.program = new Map(); // lineNum -> source string
+        this.sortedLines = [];
+        this.vars = {};
+        this.arrays = {};
+        this.forStack = [];
+        this.gosubStack = [];
+        this.dataItems = [];
+        this.dataPtr = 0;
+
+        // Running execution state
+        this.running = false;
+        this.execLineIdx = 0;
+        this.execStmtIdx = 0;
+        this.currentLineNum = 0;
+        this.stoppedState = null;
+        this.inputTarget = null; // { vars: [...], prompt: string }
+      }
+
+      getScreenDims() {
+        if (this.hw.screenMode === "24x24") {
+          // Stock Superboard II visible window inside 32x32 VRAM: cols 4..27, rows 4..27
+          return { cols: 24, rows: 24, offX: 4, offY: 4 };
+        }
+        return { cols: 32, rows: 32, offX: 0, offY: 0 };
+      }
+
+      vramAddr(x, y) {
+        const { offX, offY } = this.getScreenDims();
+        const vx = (offX + x) & 31;
+        const vy = (offY + y) & 31;
+        return 0xD000 + vy * 32 + vx;
+      }
+
+      clearScreen() {
+        for (let i = 0; i < 1024; i++) {
+          this.hw.write(0xD000 + i, 0x20);
+        }
+        this.cursorX = 0;
+        this.cursorY = 0;
+      }
+
+      scrollUp() {
+        const { cols, rows } = this.getScreenDims();
+        for (let y = 0; y < rows - 1; y++) {
+          for (let x = 0; x < cols; x++) {
+            const ch = this.hw.read(this.vramAddr(x, y + 1));
+            this.hw.write(this.vramAddr(x, y), ch);
+          }
+        }
+        for (let x = 0; x < cols; x++) {
+          this.hw.write(this.vramAddr(x, rows - 1), 0x20);
+        }
+      }
+
+      putChar(ch) {
+        const { cols, rows } = this.getScreenDims();
+        if (ch === "\r" || ch === "\n") {
+          this.cursorX = 0;
+          this.cursorY++;
+          if (this.cursorY >= rows) {
+            this.scrollUp();
+            this.cursorY = rows - 1;
+          }
+          return;
+        }
+        if (ch === "\b") {
+          if (this.cursorX > 0) {
+            this.cursorX--;
+            this.hw.write(this.vramAddr(this.cursorX, this.cursorY), 0x20);
+          }
+          return;
+        }
+        const code = ch.charCodeAt(0) & 0xFF;
+        this.hw.write(this.vramAddr(this.cursorX, this.cursorY), code);
+        this.cursorX++;
+        if (this.cursorX >= cols) {
+          this.cursorX = 0;
+          this.cursorY++;
+          if (this.cursorY >= rows) {
+            this.scrollUp();
+            this.cursorY = rows - 1;
+          }
+        }
+      }
+
+      print(str) {
+        for (let i = 0; i < str.length; i++) {
+          this.putChar(str[i]);
+        }
+      }
+
+      println(str = "") {
+        this.print(str + "\n");
+      }
+
+      enterCold() {
+        this.active = true;
+        this.running = false;
+        this.program.clear();
+        this.sortedLines = [];
+        this.vars = {};
+        this.arrays = {};
+        this.forStack = [];
+        this.gosubStack = [];
+        this.clearScreen();
+        this.print("MEMORY SIZE? ");
+        this.bootStage = "MEMSIZE";
+        this.inputBuffer = "";
+      }
+
+      enterWarm() {
+        this.active = true;
+        this.running = false;
+        this.clearScreen();
+        this.showBanner();
+        this.bootStage = "PROMPT";
+        this.inputBuffer = "";
+        this.println("OK");
+      }
+
+      showBanner() {
+        const freeBytes = Math.max(1024, 31999 - this.serializeProgramToRam());
+        this.println("");
+        this.println("OHIO SCIENTIFIC");
+        this.println("6502 BASIC VERSION 1.0 REV 3.2");
+        this.println("COPYRIGHT 1977 BY MICROSOFT");
+        this.println("");
+        this.println(`${freeBytes} BYTES FREE`);
+      }
+
+      // Mirror BASIC lines into 6502 RAM starting at $0300 so memory viewer & PEEK see them
+      serializeProgramToRam() {
+        let ptr = 0x0300;
+        this.sortedLines = Array.from(this.program.keys()).sort((a, b) => a - b);
+        for (const ln of this.sortedLines) {
+          const text = this.program.get(ln);
+          const nextPtr = ptr + 4 + text.length + 1;
+          if (nextPtr >= 0x7F00) break;
+          this.hw.write(ptr, nextPtr & 0xFF);
+          this.hw.write(ptr + 1, (nextPtr >> 8) & 0xFF);
+          this.hw.write(ptr + 2, ln & 0xFF);
+          this.hw.write(ptr + 3, (ln >> 8) & 0xFF);
+          for (let i = 0; i < text.length; i++) {
+            this.hw.write(ptr + 4 + i, text.charCodeAt(i) & 0xFF);
+          }
+          this.hw.write(ptr + 4 + text.length, 0x00);
+          ptr = nextPtr;
+        }
+        this.hw.write(ptr, 0x00);
+        this.hw.write(ptr + 1, 0x00);
+        // Store end-of-program pointer in Zero Page $2D/$2E (standard Microsoft BASIC VARTAB)
+        this.hw.write(0x002B, 0x00);
+        this.hw.write(0x002C, 0x03);
+        this.hw.write(0x002D, (ptr + 2) & 0xFF);
+        this.hw.write(0x002E, ((ptr + 2) >> 8) & 0xFF);
+        return ptr - 0x0300;
+      }
+
+      handleBreak() {
+        if (!this.active) return;
+        if (this.running || this.bootStage === "INPUT") {
+          this.stoppedState = {
+            execLineIdx: this.execLineIdx,
+            execStmtIdx: this.execStmtIdx
+          };
+          this.running = false;
+          this.bootStage = "PROMPT";
+          this.inputBuffer = "";
+          this.println("");
+          if (this.currentLineNum > 0) {
+            this.println(`BREAK IN LINE ${this.currentLineNum}`);
+          } else {
+            this.println("BREAK");
+          }
+          this.println("OK");
+        }
+      }
+
+      // Called every frame from main loop to process keyboard input & execute BASIC statements
+      tick(statementsBudget = 450) {
+        if (!this.active) return;
+
+        // 1. Handle interactive line input when not executing a loop
+        if (!this.running) {
+          let code;
+          while ((code = this.hw.popAscii()) !== 0) {
+            if (code === 0x03) { // Ctrl+C
+              this.handleBreak();
+              return;
+            }
+            if (code === 0x0D || code === 0x0A) { // RETURN
+              this.println("");
+              const line = this.inputBuffer;
+              this.inputBuffer = "";
+              this.processEnteredLine(line);
+              if (this.running) break;
+            } else if (code === 0x08 || code === 0x7F) { // RUB OUT / Backspace
+              if (this.inputBuffer.length > 0) {
+                this.inputBuffer = this.inputBuffer.slice(0, -1);
+                this.putChar("\b");
+              }
+            } else if (code >= 0x20 && code <= 0x7E) {
+              this.inputBuffer += String.fromCharCode(code);
+              this.putChar(String.fromCharCode(code));
+            }
+          }
+        }
+
+        // 2. Execute BASIC statements if running
+        if (this.running) {
+          // Check Ctrl+C in queue without consuming keys meant for PEEK(57088)
+          if (this.hw.mem[0x00FF] === 0x03 || this.hw.charQueue[0] === 0x03) {
+            this.hw.popAscii();
+            this.handleBreak();
+            return;
+          }
+
+          let steps = 0;
+          try {
+            while (this.running && steps < statementsBudget) {
+              steps++;
+              if (this.execLineIdx >= this.sortedLines.length) {
+                this.running = false;
+                this.bootStage = "PROMPT";
+                this.println("OK");
+                break;
+              }
+              const ln = this.sortedLines[this.execLineIdx];
+              this.currentLineNum = ln;
+              const rawText = this.program.get(ln) || "";
+              const stmts = this.splitStatements(rawText);
+
+              if (this.execStmtIdx >= stmts.length) {
+                this.execLineIdx++;
+                this.execStmtIdx = 0;
+                continue;
+              }
+
+              const stmt = stmts[this.execStmtIdx].trim();
+              this.execStmtIdx++;
+              if (stmt) {
+                this.executeStatement(stmt);
+              }
+            }
+          } catch (err) {
+            this.running = false;
+            this.bootStage = "PROMPT";
+            const loc = this.currentLineNum > 0 ? ` IN LINE ${this.currentLineNum}` : "";
+            this.println(`?${err.message}${loc}`);
+            this.println("OK");
+          }
+        }
+      }
+
+      processEnteredLine(raw) {
+        if (this.bootStage === "MEMSIZE") {
+          this.print("TERMINAL WIDTH? ");
+          this.bootStage = "WIDTH";
+          return;
+        }
+        if (this.bootStage === "WIDTH") {
+          this.showBanner();
+          this.bootStage = "PROMPT";
+          this.println("OK");
+          return;
+        }
+        if (this.bootStage === "INPUT" && this.inputTarget) {
+          const parts = raw.split(",");
+          for (let i = 0; i < this.inputTarget.vars.length; i++) {
+            const vName = this.inputTarget.vars[i].trim().toUpperCase();
+            const valStr = (parts[i] !== undefined ? parts[i] : "").trim();
+            if (vName.endsWith("$")) {
+              this.assignVariable(vName, valStr.replace(/^"|"$/g, ""));
+            } else {
+              const num = parseFloat(valStr);
+              this.assignVariable(vName, isNaN(num) ? 0 : num);
+            }
+          }
+          this.inputTarget = null;
+          this.bootStage = "PROMPT";
+          this.running = true;
+          return;
+        }
+
+        const trimmed = raw.trim();
+        if (!trimmed) return;
+
+        // Check if line starts with a line number (program editing)
+        const lineMatch = trimmed.match(/^(\d+)\s*(.*)$/);
+        if (lineMatch) {
+          const lineNum = parseInt(lineMatch[1], 10);
+          const body = lineMatch[2];
+          if (body === "") {
+            this.program.delete(lineNum);
+          } else {
+            this.program.set(lineNum, body);
+          }
+          this.serializeProgramToRam();
+          return;
+        }
+
+        // Immediate mode execution
+        this.currentLineNum = 0;
+        try {
+          const stmts = this.splitStatements(trimmed);
+          for (let i = 0; i < stmts.length; i++) {
+            const s = stmts[i].trim();
+            if (s) this.executeStatement(s);
+            if (this.running || this.bootStage === "INPUT") break;
+          }
+          if (!this.running && this.bootStage === "PROMPT") {
+            this.println("OK");
+          }
+        } catch (err) {
+          this.running = false;
+          this.bootStage = "PROMPT";
+          this.println(`?${err.message}`);
+          this.println("OK");
+        }
+      }
+
+      // Split statements by ':' outside of string literals and REM comments
+      splitStatements(line) {
+        const res = [];
+        let cur = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') inQuotes = !inQuotes;
+          if (!inQuotes) {
+            const rest = line.slice(i).toUpperCase();
+            if (rest.startsWith("REM") && (i === 0 || !/[A-Z0-9]/.test(line[i - 1]))) {
+              cur += line.slice(i);
+              break;
+            }
+            if (ch === ":") {
+              res.push(cur);
+              cur = "";
+              continue;
+            }
+          }
+          cur += ch;
+        }
+        if (cur.trim() !== "") res.push(cur);
+        return res;
+      }
+
+      startRun(startLine = null) {
+        this.serializeProgramToRam();
+        this.vars = {};
+        this.arrays = {};
+        this.forStack = [];
+        this.gosubStack = [];
+        this.collectData();
+        this.hw.charQueue = [];
+        this.hw.mem[0x00FF] = 0;
+
+        if (this.sortedLines.length === 0) {
+          this.running = false;
+          this.println("OK");
+          return;
+        }
+
+        if (startLine !== null) {
+          const idx = this.sortedLines.indexOf(startLine);
+          if (idx === -1) throw new Error("UNDEF'D STATEMENT ERROR");
+          this.execLineIdx = idx;
+        } else {
+          this.execLineIdx = 0;
+        }
+        this.execStmtIdx = 0;
+        this.running = true;
+      }
+
+      collectData() {
+        this.dataItems = [];
+        this.dataPtr = 0;
+        for (const ln of this.sortedLines) {
+          const stmts = this.splitStatements(this.program.get(ln));
+          for (const st of stmts) {
+            const m = st.trim().match(/^DATA\s+(.+)$/i);
+            if (m) {
+              const parts = this.splitArgs(m[1]);
+              for (const p of parts) {
+                const t = p.trim();
+                if (t.startsWith('"') && t.endsWith('"')) {
+                  this.dataItems.push(t.slice(1, -1));
+                } else if (!isNaN(Number(t)) && t !== "") {
+                  this.dataItems.push(Number(t));
+                } else {
+                  this.dataItems.push(t);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      splitArgs(str, sep = ",") {
+        const res = [];
+        let cur = "";
+        let inQuotes = false;
+        let depth = 0;
+        for (let i = 0; i < str.length; i++) {
+          const c = str[i];
+          if (c === '"') inQuotes = !inQuotes;
+          else if (!inQuotes) {
+            if (c === "(") depth++;
+            else if (c === ")") depth--;
+            else if (c === sep && depth === 0) {
+              res.push(cur);
+              cur = "";
+              continue;
+            }
+          }
+          cur += c;
+        }
+        res.push(cur);
+        return res;
+      }
+
+      executeStatement(stmt) {
+        const upper = stmt.toUpperCase();
+
+        // REM / DATA
+        if (upper === "REM" || upper.startsWith("REM ") || upper.startsWith("DATA ")) {
+          return;
+        }
+
+        // NEW
+        if (upper === "NEW") {
+          this.program.clear();
+          this.sortedLines = [];
+          this.vars = {};
+          this.arrays = {};
+          this.serializeProgramToRam();
+          this.running = false;
+          return;
+        }
+
+        // CLEAR
+        if (upper === "CLEAR") {
+          this.vars = {};
+          this.arrays = {};
+          this.forStack = [];
+          this.gosubStack = [];
+          return;
+        }
+
+        // LIST [start][-end]
+        if (upper === "LIST" || upper.startsWith("LIST ")) {
+          this.serializeProgramToRam();
+          const arg = stmt.slice(4).trim();
+          let minL = 0, maxL = 65535;
+          if (arg) {
+            if (arg.includes("-")) {
+              const [a, b] = arg.split("-");
+              if (a.trim()) minL = parseInt(a.trim(), 10);
+              if (b.trim()) maxL = parseInt(b.trim(), 10);
+            } else {
+              minL = maxL = parseInt(arg, 10);
+            }
+          }
+          for (const ln of this.sortedLines) {
+            if (ln >= minL && ln <= maxL) {
+              this.println(`${ln} ${this.program.get(ln)}`);
+            }
+          }
+          return;
+        }
+
+        // RUN [line]
+        if (upper === "RUN" || upper.startsWith("RUN ")) {
+          const arg = stmt.slice(3).trim();
+          this.startRun(arg ? parseInt(arg, 10) : null);
+          return;
+        }
+
+        // CONT
+        if (upper === "CONT") {
+          if (!this.stoppedState) throw new Error("CAN'T CONTINUE ERROR");
+          this.execLineIdx = this.stoppedState.execLineIdx;
+          this.execStmtIdx = this.stoppedState.execStmtIdx;
+          this.stoppedState = null;
+          this.running = true;
+          return;
+        }
+
+        // END / STOP
+        if (upper === "END" || upper === "STOP") {
+          if (upper === "STOP") {
+            this.stoppedState = { execLineIdx: this.execLineIdx, execStmtIdx: this.execStmtIdx };
+            this.println(`BREAK IN LINE ${this.currentLineNum}`);
+          }
+          this.running = false;
+          this.println("OK");
+          return;
+        }
+
+        // PRINT or ?
+        if (upper === "PRINT" || upper.startsWith("PRINT ") || upper.startsWith("?")) {
+          const exprPart = upper.startsWith("?") ? stmt.slice(1).trim() : stmt.slice(5).trim();
+          this.execPrint(exprPart);
+          return;
+        }
+
+        // POKE addr, val
+        if (upper.startsWith("POKE ")) {
+          const args = this.splitArgs(stmt.slice(5));
+          if (args.length < 2) throw new Error("SYNTAX ERROR");
+          const addr = Math.floor(this.evalExpr(args[0])) & 0xFFFF;
+          const val = Math.floor(this.evalExpr(args[1])) & 0xFF;
+          this.hw.write(addr, val);
+          return;
+        }
+
+        // SYS addr (Execute real 6502 machine code subroutine until RTS!)
+        if (upper.startsWith("SYS ")) {
+          const addr = Math.floor(this.evalExpr(stmt.slice(4))) & 0xFFFF;
+          this.callMachineCode(addr);
+          return;
+        }
+
+        // GOTO line
+        if (upper.startsWith("GOTO ")) {
+          const target = Math.floor(this.evalExpr(stmt.slice(5)));
+          this.jumpToLine(target);
+          return;
+        }
+
+        // GOSUB line
+        if (upper.startsWith("GOSUB ")) {
+          const target = Math.floor(this.evalExpr(stmt.slice(6)));
+          this.gosubStack.push({
+            execLineIdx: this.execLineIdx,
+            execStmtIdx: this.execStmtIdx
+          });
+          this.jumpToLine(target);
+          return;
+        }
+
+        // RETURN
+        if (upper === "RETURN") {
+          if (this.gosubStack.length === 0) throw new Error("RETURN WITHOUT GOSUB ERROR");
+          const ret = this.gosubStack.pop();
+          this.execLineIdx = ret.execLineIdx;
+          this.execStmtIdx = ret.execStmtIdx;
+          return;
+        }
+
+        // ON expr GOTO/GOSUB l1, l2, ...
+        if (upper.startsWith("ON ")) {
+          const m = stmt.match(/^ON\s+(.+?)\s+(GOTO|GOSUB)\s+(.+)$/i);
+          if (!m) throw new Error("SYNTAX ERROR");
+          const idx = Math.floor(this.evalExpr(m[1]));
+          const targets = m[3].split(",").map(s => parseInt(s.trim(), 10));
+          if (idx >= 1 && idx <= targets.length) {
+            if (m[2].toUpperCase() === "GOSUB") {
+              this.gosubStack.push({ execLineIdx: this.execLineIdx, execStmtIdx: this.execStmtIdx });
+            }
+            this.jumpToLine(targets[idx - 1]);
+          }
+          return;
+        }
+
+        // IF cond THEN action
+        if (upper.startsWith("IF ")) {
+          const thenIdx = this.findKeywordOutsideQuotes(stmt, "THEN");
+          if (thenIdx === -1) throw new Error("SYNTAX ERROR");
+          const condStr = stmt.slice(3, thenIdx).trim();
+          const thenPart = stmt.slice(thenIdx + 4).trim();
+          const condVal = this.evalExpr(condStr);
+          if (condVal !== 0) {
+            if (/^\d+$/.test(thenPart)) {
+              this.jumpToLine(parseInt(thenPart, 10));
+            } else {
+              const subStmts = this.splitStatements(thenPart);
+              for (const ss of subStmts) {
+                if (ss.trim()) this.executeStatement(ss.trim());
+                if (!this.running) break;
+              }
+            }
+          }
+          return;
+        }
+
+        // FOR var = start TO end [STEP step]
+        if (upper.startsWith("FOR ")) {
+          const m = stmt.match(/^FOR\s+([A-Z][A-Z0-9]*)\s*=\s*(.+?)\s+TO\s+(.+?)(?:\s+STEP\s+(.+))?$/i);
+          if (!m) throw new Error("SYNTAX ERROR");
+          const varName = m[1].toUpperCase();
+          const startVal = Number(this.evalExpr(m[2]));
+          const endVal = Number(this.evalExpr(m[3]));
+          const stepVal = m[4] ? Number(this.evalExpr(m[4])) : 1;
+          this.vars[varName] = startVal;
+          // Remove any existing loop for same variable
+          this.forStack = this.forStack.filter(f => f.varName !== varName);
+          this.forStack.push({
+            varName,
+            endVal,
+            stepVal,
+            execLineIdx: this.execLineIdx,
+            execStmtIdx: this.execStmtIdx
+          });
+          return;
+        }
+
+        // NEXT [var]
+        if (upper === "NEXT" || upper.startsWith("NEXT ")) {
+          const arg = stmt.slice(4).trim();
+          const varNames = arg ? arg.split(",").map(s => s.trim().toUpperCase()) : [null];
+          for (const vn of varNames) {
+            if (this.forStack.length === 0) throw new Error("NEXT WITHOUT FOR ERROR");
+            let loop = this.forStack[this.forStack.length - 1];
+            if (vn) {
+              while (this.forStack.length > 0 && this.forStack[this.forStack.length - 1].varName !== vn) {
+                this.forStack.pop();
+              }
+              if (this.forStack.length === 0) throw new Error("NEXT WITHOUT FOR ERROR");
+              loop = this.forStack[this.forStack.length - 1];
+            }
+            this.vars[loop.varName] = (this.vars[loop.varName] || 0) + loop.stepVal;
+            const cur = this.vars[loop.varName];
+            const done = loop.stepVal >= 0 ? (cur > loop.endVal) : (cur < loop.endVal);
+            if (!done) {
+              this.execLineIdx = loop.execLineIdx;
+              this.execStmtIdx = loop.execStmtIdx;
+              return;
+            } else {
+              this.forStack.pop();
+            }
+          }
+          return;
+        }
+
+        // DIM A(10), B$(5,5)
+        if (upper.startsWith("DIM ")) {
+          const decls = this.splitArgs(stmt.slice(4));
+          for (const d of decls) {
+            const m = d.trim().match(/^([A-Z][A-Z0-9]*\$?)\((.+)\)$/i);
+            if (!m) throw new Error("SYNTAX ERROR");
+            const name = m[1].toUpperCase();
+            const dims = this.splitArgs(m[2]).map(x => Math.floor(this.evalExpr(x)) + 1);
+            this.arrays[name] = { dims, data: {} };
+          }
+          return;
+        }
+
+        // READ v1, v2
+        if (upper.startsWith("READ ")) {
+          const targets = this.splitArgs(stmt.slice(5));
+          for (const t of targets) {
+            if (this.dataPtr >= this.dataItems.length) throw new Error("OUT OF DATA ERROR");
+            this.assignVariable(t.trim().toUpperCase(), this.dataItems[this.dataPtr++]);
+          }
+          return;
+        }
+
+        // RESTORE
+        if (upper === "RESTORE") {
+          this.dataPtr = 0;
+          return;
+        }
+
+        // INPUT ["prompt";] var1, var2
+        if (upper.startsWith("INPUT ")) {
+          let rest = stmt.slice(6).trim();
+          let prompt = "? ";
+          if (rest.startsWith('"')) {
+            const endQ = rest.indexOf('"', 1);
+            if (endQ !== -1) {
+              prompt = rest.slice(1, endQ);
+              rest = rest.slice(endQ + 1).trim();
+              if (rest.startsWith(";") || rest.startsWith(",")) {
+                if (rest.startsWith(";")) prompt += "? ";
+                rest = rest.slice(1).trim();
+              }
+            }
+          }
+          this.print(prompt);
+          this.inputTarget = { vars: this.splitArgs(rest) };
+          this.bootStage = "INPUT";
+          this.running = false;
+          return;
+        }
+
+        // [LET] var = expr
+        const letStmt = upper.startsWith("LET ") ? stmt.slice(4).trim() : stmt;
+        const eqIdx = this.findCharOutsideParens(letStmt, "=");
+        if (eqIdx !== -1) {
+          const lhs = letStmt.slice(0, eqIdx).trim().toUpperCase();
+          const rhs = letStmt.slice(eqIdx + 1).trim();
+          const val = this.evalExpr(rhs);
+          this.assignVariable(lhs, val);
+          return;
+        }
+
+        throw new Error("SYNTAX ERROR");
+      }
+
+      jumpToLine(lineNum) {
+        const idx = this.sortedLines.indexOf(lineNum);
+        if (idx === -1) throw new Error("UNDEF'D STATEMENT ERROR");
+        this.execLineIdx = idx;
+        this.execStmtIdx = 0;
+      }
+
+      assignVariable(lhs, val) {
+        const arrMatch = lhs.match(/^([A-Z][A-Z0-9]*\$?)\((.+)\)$/);
+        if (arrMatch) {
+          const name = arrMatch[1];
+          const idxs = this.splitArgs(arrMatch[2]).map(x => Math.floor(this.evalExpr(x)));
+          if (!this.arrays[name]) {
+            this.arrays[name] = { dims: [11, 11], data: {} };
+          }
+          this.arrays[name].data[idxs.join(",")] = val;
+        } else {
+          this.vars[lhs] = val;
+        }
+      }
+
+      execPrint(exprPart) {
+        if (!exprPart) {
+          this.println("");
+          return;
+        }
+        let trailingSep = false;
+        let i = 0;
+        let cur = "";
+        let inQuotes = false;
+        let depth = 0;
+
+        const flushToken = (sep) => {
+          const tok = cur.trim();
+          cur = "";
+          if (tok) {
+            const up = tok.toUpperCase();
+            if (up.startsWith("TAB(") && tok.endsWith(")")) {
+              const col = Math.max(0, Math.floor(this.evalExpr(tok.slice(4, -1))));
+              while (this.cursorX < col) this.putChar(" ");
+            } else if (up.startsWith("SPC(") && tok.endsWith(")")) {
+              const cnt = Math.max(0, Math.floor(this.evalExpr(tok.slice(4, -1))));
+              for (let k = 0; k < cnt; k++) this.putChar(" ");
+            } else {
+              const val = this.evalExpr(tok);
+              if (typeof val === "number") {
+                this.print((val >= 0 ? " " : "") + String(val) + " ");
+              } else {
+                this.print(String(val));
+              }
+            }
+          }
+          if (sep === ",") {
+            const nextZone = (Math.floor(this.cursorX / 8) + 1) * 8;
+            while (this.cursorX < nextZone) this.putChar(" ");
+          }
+        };
+
+        while (i < exprPart.length) {
+          const c = exprPart[i];
+          if (c === '"') inQuotes = !inQuotes;
+          else if (!inQuotes) {
+            if (c === "(") depth++;
+            else if (c === ")") depth--;
+            else if ((c === ";" || c === ",") && depth === 0) {
+              flushToken(c);
+              trailingSep = true;
+              i++;
+              continue;
+            }
+          }
+          trailingSep = false;
+          cur += c;
+          i++;
+        }
+        if (cur.trim()) {
+          flushToken(null);
+          trailingSep = false;
+        }
+        if (!trailingSep) {
+          this.println("");
+        }
+      }
+
+      /**
+       * Executes genuine 6502 machine code at `addr` (called from SYS or USR)
+       * until an RTS instruction returns to our synthetic return sentinel!
+       */
+      callMachineCode(addr) {
+        const sentinel = 0xFFF0;
+        this.hw.mem[sentinel] = 0xEA; // NOP sentinel
+        const savedPC = this.cpu.PC;
+        this.cpu.push16((sentinel - 1) & 0xFFFF);
+        this.cpu.PC = addr & 0xFFFF;
+
+        let safety = 0;
+        while (this.cpu.PC !== sentinel && safety < 250000) {
+          this.cpu.step();
+          safety++;
+        }
+        this.cpu.PC = savedPC;
+        return this.cpu.A;
+      }
+
+      findKeywordOutsideQuotes(str, kw) {
+        let inQ = false;
+        const up = str.toUpperCase();
+        for (let i = 0; i <= str.length - kw.length; i++) {
+          if (str[i] === '"') inQ = !inQ;
+          if (!inQ && up.slice(i, i + kw.length) === kw) {
+            const prev = i > 0 ? up[i - 1] : " ";
+            const next = i + kw.length < up.length ? up[i + kw.length] : " ";
+            if (!/[A-Z0-9]/.test(prev) && !/[A-Z0-9]/.test(next)) return i;
+          }
+        }
+        return -1;
+      }
+
+      findCharOutsideParens(str, ch) {
+        let inQ = false;
+        let depth = 0;
+        for (let i = 0; i < str.length; i++) {
+          if (str[i] === '"') inQ = !inQ;
+          else if (!inQ) {
+            if (str[i] === "(") depth++;
+            else if (str[i] === ")") depth--;
+            else if (str[i] === ch && depth === 0) return i;
+          }
+        }
+        return -1;
+      }
+
+      // Recursive-descent expression evaluator supporting full Microsoft 6502 BASIC operators & functions
+      evalExpr(expr) {
+        const tokens = this.tokenizeExpr(expr);
+        let pos = 0;
+
+        const peek = () => tokens[pos] || null;
+        const consume = () => tokens[pos++];
+
+        const parseOr = () => {
+          let left = parseAnd();
+          while (peek() && peek().type === "OP" && peek().val === "OR") {
+            consume();
+            const right = parseAnd();
+            left = (Math.floor(left) | Math.floor(right));
+          }
+          return left;
+        };
+
+        const parseAnd = () => {
+          let left = parseNot();
+          while (peek() && peek().type === "OP" && peek().val === "AND") {
+            consume();
+            const right = parseNot();
+            left = (Math.floor(left) & Math.floor(right));
+          }
+          return left;
+        };
+
+        const parseNot = () => {
+          if (peek() && peek().type === "OP" && peek().val === "NOT") {
+            consume();
+            return ~Math.floor(parseNot());
+          }
+          return parseRel();
+        };
+
+        const parseRel = () => {
+          let left = parseAdd();
+          while (peek() && peek().type === "REL") {
+            const op = consume().val;
+            const right = parseAdd();
+            let res = false;
+            if (op === "=") res = (left === right);
+            else if (op === "<>" || op === "><") res = (left !== right);
+            else if (op === "<") res = (left < right);
+            else if (op === ">") res = (left > right);
+            else if (op === "<=" || op === "=<") res = (left <= right);
+            else if (op === ">=" || op === "=>") res = (left >= right);
+            left = res ? -1 : 0; // Microsoft BASIC uses -1 for TRUE, 0 for FALSE
+          }
+          return left;
+        };
+
+        const parseAdd = () => {
+          let left = parseMul();
+          while (peek() && peek().type === "OP" && (peek().val === "+" || peek().val === "-")) {
+            const op = consume().val;
+            const right = parseMul();
+            if (op === "+") {
+              left = (typeof left === "string" || typeof right === "string")
+                ? String(left) + String(right)
+                : Number(left) + Number(right);
+            } else {
+              left = Number(left) - Number(right);
+            }
+          }
+          return left;
+        };
+
+        const parseMul = () => {
+          let left = parsePow();
+          while (peek() && peek().type === "OP" && (peek().val === "*" || peek().val === "/")) {
+            const op = consume().val;
+            const right = parsePow();
+            if (op === "*") left = Number(left) * Number(right);
+            else {
+              if (Number(right) === 0) throw new Error("DIVISION BY ZERO ERROR");
+              left = Number(left) / Number(right);
+            }
+          }
+          return left;
+        };
+
+        const parsePow = () => {
+          let left = parseUnary();
+          while (peek() && peek().type === "OP" && peek().val === "^") {
+            consume();
+            const right = parseUnary();
+            left = Math.pow(Number(left), Number(right));
+          }
+          return left;
+        };
+
+        const parseUnary = () => {
+          if (peek() && peek().type === "OP" && (peek().val === "-" || peek().val === "+")) {
+            const op = consume().val;
+            const v = Number(parseUnary());
+            return op === "-" ? -v : v;
+          }
+          return parsePrimary();
+        };
+
+        const parsePrimary = () => {
+          const t = peek();
+          if (!t) return 0;
+
+          if (t.type === "NUM") { consume(); return t.val; }
+          if (t.type === "STR") { consume(); return t.val; }
+
+          if (t.type === "LPAREN") {
+            consume();
+            const v = parseOr();
+            if (peek() && peek().type === "RPAREN") consume();
+            return v;
+          }
+
+          if (t.type === "ID") {
+            const name = consume().val;
+            // Function or Array call
+            if (peek() && peek().type === "LPAREN") {
+              consume();
+              const args = [];
+              if (peek() && peek().type !== "RPAREN") {
+                args.push(parseOr());
+                while (peek() && peek().type === "COMMA") {
+                  consume();
+                  args.push(parseOr());
+                }
+              }
+              if (peek() && peek().type === "RPAREN") consume();
+              return this.evalFunctionOrArray(name, args);
+            }
+            // Scalar variable
+            if (this.vars[name] !== undefined) return this.vars[name];
+            return name.endsWith("$") ? "" : 0;
+          }
+
+          consume();
+          return 0;
+        };
+
+        return parseOr();
+      }
+
+      tokenizeExpr(expr) {
+        const tokens = [];
+        let i = 0;
+        while (i < expr.length) {
+          const c = expr[i];
+          if (/\s/.test(c)) { i++; continue; }
+
+          if (c === '"') {
+            let s = "";
+            i++;
+            while (i < expr.length && expr[i] !== '"') s += expr[i++];
+            i++;
+            tokens.push({ type: "STR", val: s });
+            continue;
+          }
+
+          if (/[0-9.]/.test(c)) {
+            let numStr = "";
+            while (i < expr.length && /[0-9.E+-]/i.test(expr[i])) {
+              if ((expr[i] === "+" || expr[i] === "-") && !/E/i.test(numStr[numStr.length - 1])) break;
+              numStr += expr[i++];
+            }
+            tokens.push({ type: "NUM", val: parseFloat(numStr) });
+            continue;
+          }
+
+          if (/[A-Z]/i.test(c)) {
+            let id = "";
+            while (i < expr.length && /[A-Z0-9$]/i.test(expr[i])) id += expr[i++];
+            const up = id.toUpperCase();
+            if (up === "AND" || up === "OR" || up === "NOT") {
+              tokens.push({ type: "OP", val: up });
+            } else {
+              tokens.push({ type: "ID", val: up });
+            }
+            continue;
+          }
+
+          const two = expr.slice(i, i + 2);
+          if (["<>", "><", "<=", "=<", ">=", "=>"].includes(two)) {
+            tokens.push({ type: "REL", val: two });
+            i += 2;
+            continue;
+          }
+          if (["=", "<", ">"].includes(c)) {
+            tokens.push({ type: "REL", val: c });
+            i++;
+            continue;
+          }
+          if (["+", "-", "*", "/", "^"].includes(c)) {
+            tokens.push({ type: "OP", val: c });
+            i++;
+            continue;
+          }
+          if (c === "(") { tokens.push({ type: "LPAREN" }); i++; continue; }
+          if (c === ")") { tokens.push({ type: "RPAREN" }); i++; continue; }
+          if (c === ",") { tokens.push({ type: "COMMA" }); i++; continue; }
+          i++;
+        }
+        return tokens;
+      }
+
+      evalFunctionOrArray(name, args) {
+        const a0 = args[0];
+        switch (name) {
+          case "ABS":   return Math.abs(Number(a0));
+          case "INT":   return Math.floor(Number(a0));
+          case "SGN":   return Math.sign(Number(a0));
+          case "SQR":   return Math.sqrt(Math.max(0, Number(a0)));
+          case "SIN":   return Math.sin(Number(a0));
+          case "COS":   return Math.cos(Number(a0));
+          case "TAN":   return Math.tan(Number(a0));
+          case "ATN":   return Math.atan(Number(a0));
+          case "LOG":   return Math.log(Number(a0));
+          case "EXP":   return Math.exp(Number(a0));
+          case "RND":   return Math.random();
+          case "PEEK":  return this.hw.read(Math.floor(Number(a0)) & 0xFFFF);
+          case "USR":   return this.callMachineCode(this.hw.read(0x000B) | (this.hw.read(0x000C) << 8) || 0x0200);
+          case "FRE":   return 31999 - this.serializeProgramToRam();
+          case "POS":   return this.cursorX;
+          case "LEN":   return String(a0).length;
+          case "ASC":   return String(a0).length > 0 ? String(a0).charCodeAt(0) : 0;
+          case "VAL":   return parseFloat(String(a0)) || 0;
+          case "CHR$":  return String.fromCharCode(Math.floor(Number(a0)) & 0xFF);
+          case "STR$":  return (Number(a0) >= 0 ? " " : "") + String(a0);
+          case "LEFT$": return String(a0).slice(0, Math.max(0, Math.floor(Number(args[1]))));
+          case "RIGHT$": {
+            const n = Math.max(0, Math.floor(Number(args[1])));
+            return n === 0 ? "" : String(a0).slice(-n);
+          }
+          case "MID$": {
+            const start = Math.max(1, Math.floor(Number(args[1]))) - 1;
+            const len = args[2] !== undefined ? Math.max(0, Math.floor(Number(args[2]))) : undefined;
+            return len !== undefined ? String(a0).slice(start, start + len) : String(a0).slice(start);
+          }
+          default: {
+            // Array lookup
+            const arr = this.arrays[name];
+            if (!arr) return name.endsWith("$") ? "" : 0;
+            const key = args.map(x => Math.floor(Number(x))).join(",");
+            if (arr.data[key] !== undefined) return arr.data[key];
+            return name.endsWith("$") ? "" : 0;
+          }
+        }
+      }
+    }
+
+    /**
+     * ============================================================================
+     * SECTION 6: BUILT-IN DEMO PROGRAMS & WEB AUDIO FEEDBACK
+     * ============================================================================
+     */
+    const DEMO_PROGRAMS = {
+      graphics: {
+        type: "basic",
+        title: "OSI Graphics Gallery (BASIC)",
+        code: `10 REM OHIO SCIENTIFIC SUPERBOARD II GRAPHICS
+20 FOR I=0 TO 1023:POKE 53248+I,32:NEXT I
+30 FOR X=0 TO 31
+40 POKE 53248+X,149:POKE 53248+736+X,149
+50 NEXT X
+60 FOR Y=1 TO 22
+70 POKE 53248+Y*32,150:POKE 53248+Y*32+31,150
+80 NEXT Y
+90 POKE 53248,140:POKE 53279,141
+100 POKE 53984,142:POKE 54015,143
+110 PRINT:PRINT "   OSI SUPERBOARD II"
+120 PRINT "  256-GLYPH CHAR ROM"
+130 PRINT
+140 FOR C=128 TO 191
+150 PRINT CHR$(C);
+160 IF (C-127)/16=INT((C-127)/16) THEN PRINT
+170 NEXT C
+180 PRINT:PRINT " SUITS: ";CHR$(152);" ";CHR$(153);" ";CHR$(154);" ";CHR$(155)
+190 PRINT " SHIPS: ";CHR$(180);" ";CHR$(181);" ";CHR$(182);" ";CHR$(183)`
+      },
+      starfighter: {
+        type: "basic",
+        title: "Starfighter DF00 Arcade (BASIC)",
+        code: `10 REM STARFIGHTER - USES DIRECT $DF00 POLLING
+20 REM KEYS: A=LEFT, D=RIGHT, SPACE=FIRE
+30 FOR I=0 TO 1023:POKE 53248+I,32:NEXT I
+40 PX=15:EX=5:ED=1:BY=-1:SC=0
+50 POKE 53248+64+EX,32:EX=EX+ED
+60 IF EX>26 OR EX<5 THEN ED=-ED
+70 POKE 53248+64+EX,181
+80 POKE 53248+640+PX,32
+90 POKE 57088,247:K=PEEK(57088)
+100 IF (K AND 1)=0 AND PX>5 THEN PX=PX-1
+110 IF (K AND 4)=0 AND PX<26 THEN PX=PX+1
+120 POKE 53248+640+PX,180
+130 POKE 57088,223:K2=PEEK(57088)
+140 IF (K2 AND 32)=0 AND BY<0 THEN BX=PX:BY=19
+150 IF BY>=0 THEN POKE 53248+BY*32+BX,32:BY=BY-1
+160 IF BY>=2 THEN POKE 53248+BY*32+BX,151
+170 IF BY=2 AND ABS(BX-EX)<=1 THEN SC=SC+10:POKE 53248+64+EX,184:BY=-1:POKE 57089,1
+180 POKE 53248+37,83:POKE 53248+38,67:POKE 53248+39,58
+190 POKE 53248+41,48+INT(SC/10):POKE 53248+42,48+(SC-INT(SC/10)*10)
+200 FOR D=1 TO 18:NEXT D:GOTO 50`
+      },
+      bounce6502: {
+        type: "asm",
+        origin: 0x0200,
+        title: "6502 Machine Code Screen Bounce (ASM)",
+        code: `; Pure 6502 Machine Code Bouncing Ball in Video RAM ($D000-$D3FF)
+; Runs directly on the MOS 6502 CPU at 1.00 MHz!
+.ORG $0200
+START:
+  LDX #$00
+  LDA #$20
+CLR:
+  STA $D000,X
+  STA $D100,X
+  STA $D200,X
+  STA $D300,X
+  INX
+  BNE CLR
+
+  LDA #$04
+  STA $10       ; Ball X (4..27)
+  LDA #$04
+  STA $11       ; Ball Y (4..23)
+  LDA #$01
+  STA $12       ; DX (+1)
+  LDA #$01
+  STA $13       ; DY (+1)
+
+LOOP:
+  JSR CALCADDR
+  LDY #$00
+  LDA #$97      ; OSI Ball Graphic ($97)
+  STA ($14),Y
+
+  ; Delay loop so human eyes can track the 6502!
+  LDX #$30
+DLY1:
+  LDY #$FF
+DLY2:
+  DEY
+  BNE DLY2
+  DEX
+  BNE DLY1
+
+  ; Erase old ball
+  LDY #$00
+  LDA #$20
+  STA ($14),Y
+
+  ; Update X
+  LDA $10
+  CLC
+  ADC $12
+  STA $10
+  CMP #$1B
+  BNE CHKX0
+  LDA #$FF
+  STA $12
+CHKX0:
+  LDA $10
+  CMP #$04
+  BNE UPDY
+  LDA #$01
+  STA $12
+
+UPDY:
+  LDA $11
+  CLC
+  ADC $13
+  STA $11
+  CMP #$17
+  BNE CHKY0
+  LDA #$FF
+  STA $13
+CHKY0:
+  LDA $11
+  CMP #$04
+  BNE LOOP
+  LDA #$01
+  STA $13
+  JMP LOOP
+
+; Compute VRAM pointer ($14/$15) = $D000 + Y*32 + X
+CALCADDR:
+  LDA $11
+  STA $14
+  LDA #$00
+  STA $15
+  ASL $14
+  ROL $15
+  ASL $14
+  ROL $15
+  ASL $14
+  ROL $15
+  ASL $14
+  ROL $15
+  ASL $14
+  ROL $15
+  LDA $14
+  CLC
+  ADC $10
+  STA $14
+  LDA $15
+  ADC #$D0
+  STA $15
+  RTS`
+      },
+      maze: {
+        type: "basic",
+        title: "10 PRINT Diagonal Maze (BASIC)",
+        code: `10 REM CLASSIC 10 PRINT MAZE WITH OSI DIAGONALS
+20 FOR I=0 TO 1023:POKE 53248+I,32:NEXT I
+30 FOR Y=0 TO 23
+40 FOR X=0 TO 23
+50 C=136+INT(RND(1)*2)
+60 POKE 53248+(Y+4)*32+(X+4),C
+70 NEXT X:NEXT Y
+80 GOTO 30`
+      },
+      mandelbrot: {
+        type: "basic",
+        title: "OSI Fractal Explorer (BASIC)",
+        code: `10 REM OSI SUPERBOARD II FRACTAL GENERATOR
+20 FOR I=0 TO 1023:POKE 53248+I,32:NEXT I
+30 FOR PY=0 TO 23
+40 CI=(PY-12)/9
+50 FOR PX=0 TO 23
+60 CR=(PX-16)/10
+70 ZR=0:ZI=0:IT=0
+80 T=ZR*ZR-ZI*ZI+CR
+90 ZI=2*ZR*ZI+CI:ZR=T:IT=IT+1
+100 IF ZR*ZR+ZI*ZI<4 AND IT<12 THEN 80
+110 CH=160+IT
+120 IF IT=12 THEN CH=128
+130 POKE 53248+(PY+4)*32+(PX+4),CH
+140 NEXT PX:NEXT PY`
+      }
+    };
+
+    class AudioFeedback {
+      constructor() {
+        this.enabled = true;
+        this.ctx = null;
+      }
+
+      ensureCtx() {
+        if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.ctx && this.ctx.state === "suspended") {
+          this.ctx.resume().catch(() => {});
+        }
+      }
+
+      keyClick() {
+        if (!this.enabled) return;
+        try {
+          this.ensureCtx();
+          if (!this.ctx) return;
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(1150, now);
+          osc.frequency.exponentialRampToValueAtTime(240, now + 0.018);
+          gain.gain.setValueAtTime(0.06, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.018);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.02);
+        } catch (_) {}
+      }
+
+      dacPulse(val) {
+        if (!this.enabled) return;
+        try {
+          this.ensureCtx();
+          if (!this.ctx) return;
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = "square";
+          osc.frequency.setValueAtTime(320 + (val & 0x0F) * 60, now);
+          gain.gain.setValueAtTime(0.05, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.055);
+        } catch (_) {}
+      }
+    }
+
+    /**
+     * ============================================================================
+     * SECTION 7: MAIN EMULATOR CONTROLLER, CRT RENDERER & UI BINDINGS
+     * ============================================================================
+     */
+    window.onload = function () {
+      const charROM = buildOSICharacterROM();
+      const audio = new AudioFeedback();
+      const hw = new SuperboardHardware(audio);
+      const cpu = new CPU6502(hw);
+      const basic = new OSIBasicInterpreter(hw, cpu);
+
+      // Connect 6502 BASIC ROM Trap ($A000 / $A003) to our OSI BASIC Engine
+      hw.onBasicTrap = () => {
+        const mode = hw.mem[0x00FE];
+        if (mode === 0x02) basic.enterWarm();
+        else basic.enterCold();
+      };
+
+      // Boot the 6502 CPU from $FFFC/$FFFD ($F800)
+      cpu.reset();
+
+      // DOM References
+      const crtCanvas = document.getElementById("crtCanvas");
+      const crtCtx = crtCanvas.getContext("2d");
+      const crtScreenWrap = document.getElementById("crtScreenWrap");
+      const virtualKeyboard = document.getElementById("virtualKeyboard");
+      const toastBanner = document.getElementById("toastBanner");
+
+      let cpuPaused = false;
+      let phosphorColor = "green";
+      let scanlinesOn = true;
+      let memDumpStart = 0xD000;
+      let frameCount = 0;
+
+      const PHOSPHOR_PALETTES = {
+        green: { fg: "#44ff88", glow: "rgba(68, 255, 136, 0.35)", bg: "#030a05" },
+        amber: { fg: "#ffb833", glow: "rgba(255, 184, 51, 0.35)", bg: "#0b0702" },
+        white: { fg: "#eef6ff", glow: "rgba(220, 238, 255, 0.28)", bg: "#07090c" }
+      };
+
+      // Non-blocking toast helper (never uses alert/confirm)
+      let toastTimer = null;
+      function showToast(msg) {
+        toastBanner.textContent = msg;
+        toastBanner.classList.remove("hidden");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toastBanner.classList.add("hidden"), 3400);
+      }
+
+      // Pre-render 256 8x8 glyph sprites for crisp, zero-lag 60 FPS CRT drawing
+      const glyphCanvases = new Array(256);
+      function rebuildGlyphAtlas() {
+        const pal = PHOSPHOR_PALETTES[phosphorColor];
+        for (let code = 0; code < 256; code++) {
+          const gc = document.createElement("canvas");
+          gc.width = 8;
+          gc.height = 8;
+          const gctx = gc.getContext("2d");
+          gctx.fillStyle = pal.fg;
+          for (let r = 0; r < 8; r++) {
+            const rowBits = charROM[code * 8 + r];
+            for (let c = 0; c < 8; c++) {
+              if (rowBits & (0x80 >> c)) {
+                gctx.fillRect(c, r, 1, 1);
+              }
+            }
+          }
+          glyphCanvases[code] = gc;
+        }
+      }
+      rebuildGlyphAtlas();
+
+      // Responsive Canvas Sizing
+      function resizeCanvas() {
+        const rect = crtScreenWrap.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        crtCanvas.width = Math.max(320, Math.floor(rect.width * dpr));
+        crtCanvas.height = Math.max(240, Math.floor(rect.height * dpr));
+        crtCtx.imageSmoothingEnabled = false;
+        hw.videoDirty = true;
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+
+      // Render 1KB Video RAM ($D000-$D3FF) to CRT Canvas
+      function renderCRT() {
+        const pal = PHOSPHOR_PALETTES[phosphorColor];
+        const w = crtCanvas.width;
+        const h = crtCanvas.height;
+
+        crtCtx.fillStyle = pal.bg;
+        crtCtx.fillRect(0, 0, w, h);
+
+        const isStock24 = hw.screenMode === "24x24";
+        const cols = isStock24 ? 24 : 32;
+        const rows = isStock24 ? 24 : 32;
+        const offX = isStock24 ? 4 : 0;
+        const offY = isStock24 ? 4 : 0;
+
+        const padX = Math.floor(w * 0.045);
+        const padY = Math.floor(h * 0.05);
+        const usableW = w - padX * 2;
+        const usableH = h - padY * 2;
+        const cellW = usableW / cols;
+        const cellH = usableH / rows;
+
+        crtCtx.imageSmoothingEnabled = false;
+        crtCtx.shadowColor = pal.glow;
+        crtCtx.shadowBlur = 4;
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const vramOffset = ((offY + y) & 31) * 32 + ((offX + x) & 31);
+            const charCode = hw.mem[0xD000 + vramOffset];
+            if (charCode !== 0x20 && charCode !== 0x00) {
+              crtCtx.drawImage(
+                glyphCanvases[charCode],
+                Math.floor(padX + x * cellW),
+                Math.floor(padY + y * cellH),
+                Math.ceil(cellW),
+                Math.ceil(cellH)
+              );
+            }
+          }
+        }
+
+        // Draw blinking hardware/BASIC cursor
+        const blinkOn = Math.floor(frameCount / 22) % 2 === 0;
+        if (basic.active && !basic.running && blinkOn) {
+          const cx = basic.cursorX;
+          const cy = basic.cursorY;
+          if (cx >= 0 && cx < cols && cy >= 0 && cy < rows) {
+            crtCtx.fillStyle = pal.fg;
+            crtCtx.fillRect(
+              Math.floor(padX + cx * cellW),
+              Math.floor(padY + cy * cellH + cellH * 0.78),
+              Math.ceil(cellW),
+              Math.max(2, Math.ceil(cellH * 0.18))
+            );
+          }
+        }
+        crtCtx.shadowBlur = 0;
+      }
+
+      // Build Interactive 53-Key Superboard II PCB Keyboard
+      const keyElements = new Map();
+      function buildVirtualKeyboard() {
+        virtualKeyboard.innerHTML = "";
+        for (const rowKeys of KEYBOARD_LAYOUT) {
+          const rowDiv = document.createElement("div");
+          rowDiv.className = "flex items-center justify-center gap-1 sm:gap-1.5";
+          for (const k of rowKeys) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            const baseWidth = k.wide || "w-7 sm:w-9 md:w-10";
+            const styleClass =
+              k.style === "red" ? "osi-key-red" :
+              k.style === "dark" ? "osi-key-dark" : "osi-key-white";
+            btn.className = `osi-key ${styleClass} ${baseWidth} h-9 sm:h-10 rounded-md flex flex-col items-center justify-center leading-none px-1 relative font-mono-code`;
+
+            if (k.shift) {
+              btn.innerHTML = `
+                <span class="text-[9px] sm:text-[10px] opacity-75">${k.shift}</span>
+                <span class="text-[11px] sm:text-xs font-bold mt-0.5">${k.label}</span>
+              `;
+            } else {
+              const fontSize = k.label.length > 2 ? "text-[8px] sm:text-[9px]" : "text-[11px] sm:text-xs";
+              btn.innerHTML = `<span class="${fontSize} font-bold text-center">${k.label}</span>`;
+            }
+
+            if (k.latch) {
+              const led = document.createElement("span");
+              led.id = "shiftLockLed";
+              led.className = "w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444] absolute top-1 right-1";
+              btn.appendChild(led);
+            }
+
+            const pressDown = (e) => {
+              e.preventDefault();
+              audio.keyClick();
+              if (k.id === "BREAK") {
+                triggerBreakReset();
+                return;
+              }
+              if (k.id === "SHIFTLOCK") {
+                const locked = hw.toggleShiftLock();
+                const led = document.getElementById("shiftLockLed");
+                if (led) {
+                  led.className = locked
+                    ? "w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444] absolute top-1 right-1"
+                    : "w-1.5 h-1.5 rounded-full bg-gray-600 absolute top-1 right-1";
+                }
+                return;
+              }
+              btn.classList.add("pressed");
+              hw.setKeyMatrixState(k.row, k.col, true);
+              const ascii = resolveKeyToAscii(k);
+              if (ascii !== null) hw.enqueueAscii(ascii);
+            };
+
+            const releaseUp = (e) => {
+              e.preventDefault();
+              btn.classList.remove("pressed");
+              if (!k.latch) {
+                hw.setKeyMatrixState(k.row, k.col, false);
+              }
+            };
+
+            btn.addEventListener("mousedown", pressDown);
+            btn.addEventListener("mouseup", releaseUp);
+            btn.addEventListener("mouseleave", releaseUp);
+            btn.addEventListener("touchstart", pressDown, { passive: false });
+            btn.addEventListener("touchend", releaseUp, { passive: false });
+
+            rowDiv.appendChild(btn);
+            keyElements.set(k.id, { def: k, el: btn });
+          }
+          virtualKeyboard.appendChild(rowDiv);
+        }
+      }
+
+      function isShiftActive() {
+        return hw.shiftLock || (hw.matrix[6] & 0x03) !== 0;
+      }
+
+      function isCtrlActive() {
+        return (hw.matrix[6] & 0x08) !== 0;
+      }
+
+      function resolveKeyToAscii(k) {
+        if (k.id === "RETURN") return 0x0D;
+        if (k.id === "SPACE") return 0x20;
+        if (k.id === "RUBOUT") return 0x08;
+        if (k.id === "ESC") return 0x1B;
+        if (k.id === "LF") return 0x0A;
+        if (["LSHIFT", "RSHIFT", "CTRL", "REPEAT", "UP", "DOWN", "LEFT", "RIGHT"].includes(k.id)) {
+          return null;
+        }
+        if (k.label.length === 1) {
+          const ch = k.label;
+          if (isCtrlActive() && ch >= "A" && ch <= "Z") {
+            return ch.charCodeAt(0) - 64; // Ctrl+C = 3, etc.
+          }
+          if (ch >= "A" && ch <= "Z") {
+            return isShiftActive() ? ch.charCodeAt(0) : ch.toLowerCase().charCodeAt(0);
+          }
+          if (k.shift && (hw.matrix[6] & 0x03) !== 0) {
+            return k.shift.charCodeAt(0);
+          }
+          return ch.charCodeAt(0);
+        }
+        return null;
+      }
+
+      buildVirtualKeyboard();
+
+      // Physical Keyboard Mapping (when not typing into right-panel inputs)
+      const KEY_CODE_TO_OSI = {
+        Digit1: "1", Digit2: "2", Digit3: "3", Digit4: "4", Digit5: "5",
+        Digit6: "6", Digit7: "7", Digit8: "8", Digit9: "9", Digit0: "0",
+        Semicolon: ";", Minus: "-", Equal: "-", Quote: ":",
+        Backspace: "RUBOUT", Delete: "RUBOUT", Escape: "ESC", Enter: "RETURN",
+        Space: "SPACE", ShiftLeft: "LSHIFT", ShiftRight: "RSHIFT",
+        ControlLeft: "CTRL", ControlRight: "CTRL",
+        ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT",
+        Comma: ",", Period: ".", Slash: "/",
+        KeyA: "A", KeyB: "B", KeyC: "C", KeyD: "D", KeyE: "E", KeyF: "F",
+        KeyG: "G", KeyH: "H", KeyI: "I", KeyJ: "J", KeyK: "K", KeyL: "L",
+        KeyM: "M", KeyN: "N", KeyO: "O", KeyP: "P", KeyQ: "Q", KeyR: "R",
+        KeyS: "S", KeyT: "T", KeyU: "U", KeyV: "V", KeyW: "W", KeyX: "X",
+        KeyY: "Y", KeyZ: "Z"
+      };
+
+      window.addEventListener("keydown", (e) => {
+        const tag = document.activeElement ? document.activeElement.tagName : "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+        if (e.code === "CapsLock") {
+          const locked = hw.toggleShiftLock();
+          const led = document.getElementById("shiftLockLed");
+          if (led) {
+            led.className = locked
+              ? "w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444] absolute top-1 right-1"
+              : "w-1.5 h-1.5 rounded-full bg-gray-600 absolute top-1 right-1";
+          }
+          return;
+        }
+
+        const osiId = KEY_CODE_TO_OSI[e.code];
+        if (osiId && keyElements.has(osiId)) {
+          e.preventDefault();
+          const { def, el } = keyElements.get(osiId);
+          if (!e.repeat) {
+            audio.keyClick();
+            el.classList.add("pressed");
+            hw.setKeyMatrixState(def.row, def.col, true);
+          }
+          // Handle Ctrl+C break
+          if ((e.ctrlKey || isCtrlActive()) && e.code === "KeyC") {
+            basic.handleBreak();
+            return;
+          }
+          // Prefer exact typed printable character from e.key when applicable
+          if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+            let ch = e.key;
+            if (hw.shiftLock && !e.shiftKey && ch >= "a" && ch <= "z") {
+              ch = ch.toUpperCase();
+            }
+            hw.enqueueAscii(ch.charCodeAt(0));
+          } else {
+            const ascii = resolveKeyToAscii(def);
+            if (ascii !== null) hw.enqueueAscii(ascii);
+          }
+        }
+      });
+
+      window.addEventListener("keyup", (e) => {
+        const osiId = KEY_CODE_TO_OSI[e.code];
+        if (osiId && keyElements.has(osiId)) {
+          const { def, el } = keyElements.get(osiId);
+          el.classList.remove("pressed");
+          hw.setKeyMatrixState(def.row, def.col, false);
+        }
+      });
+
+      // Hardware BREAK / Reset
+      function triggerBreakReset() {
+        basic.active = false;
+        basic.running = false;
+        hw.charQueue = [];
+        hw.mem[0x00FF] = 0;
+        cpu.reset();
+        cpuPaused = false;
+        document.getElementById("cpuRunPauseBtn").textContent = "Pause CPU";
+        showToast("BREAK asserted — 6502 Reset to D/C/W/M ? prompt");
+      }
+
+      document.getElementById("breakBtn").addEventListener("click", triggerBreakReset);
+
+      // Quick Boot Shortcut Buttons ([C], [W], [M])
+      document.querySelectorAll(".quick-boot-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const modeChar = btn.getAttribute("data-boot");
+          if (basic.active) {
+            triggerBreakReset();
+          }
+          setTimeout(() => {
+            hw.enqueueAscii(modeChar.charCodeAt(0));
+          }, 30);
+        });
+      });
+
+      // Top Header Controls
+      document.getElementById("screenModeSelect").addEventListener("change", (e) => {
+        hw.screenMode = e.target.value;
+        hw.videoDirty = true;
+        showToast(`Video window set to ${hw.screenMode}`);
+      });
+
+      document.getElementById("phosphorSelect").addEventListener("change", (e) => {
+        phosphorColor = e.target.value;
+        rebuildGlyphAtlas();
+        hw.videoDirty = true;
+      });
+
+      document.getElementById("scanlineBtn").addEventListener("click", (e) => {
+        scanlinesOn = !scanlinesOn;
+        crtScreenWrap.classList.toggle("crt-scanlines", scanlinesOn);
+        e.target.textContent = `Scanlines: ${scanlinesOn ? "ON" : "OFF"}`;
+      });
+
+      document.getElementById("soundBtn").addEventListener("click", (e) => {
+        audio.enabled = !audio.enabled;
+        e.target.textContent = `Audio: ${audio.enabled ? "ON" : "OFF"}`;
+      });
+
+      // Demo Tape Loader
+      document.getElementById("loadDemoBtn").addEventListener("click", () => {
+        const key = document.getElementById("demoSelect").value;
+        if (!key || !DEMO_PROGRAMS[key]) {
+          showToast("Select a demo program from the Tape dropdown first.");
+          return;
+        }
+        const demo = DEMO_PROGRAMS[key];
+        if (demo.type === "basic") {
+          document.getElementById("tapeEditor").value = demo.code;
+          loadBasicFromText(demo.code, true);
+          showToast(`Loaded & running "${demo.title}"`);
+        } else if (demo.type === "asm") {
+          document.getElementById("asmOrigin").value = demo.origin.toString(16).toUpperCase().padStart(4, "0");
+          document.getElementById("asmEditor").value = demo.code;
+          assembleAndLoad(demo.code, demo.origin, true);
+          showToast(`Assembled & executing "${demo.title}" at $${demo.origin.toString(16).toUpperCase()}`);
+        }
+      });
+
+      // Right-Panel Tabs
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const target = btn.getAttribute("data-tab");
+          document.querySelectorAll(".tab-btn").forEach(b => {
+            b.classList.remove("border-emerald-400", "text-emerald-300", "bg-[#171a1f]", "font-semibold");
+            b.classList.add("border-transparent", "text-gray-400");
+          });
+          btn.classList.add("border-emerald-400", "text-emerald-300", "bg-[#171a1f]", "font-semibold");
+          btn.classList.remove("border-transparent", "text-gray-400");
+
+          document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
+          document.getElementById(`tab-${target}`).classList.remove("hidden");
+          if (target === "memory") updateHexDump();
+        });
+      });
+
+      // CPU Debugger Buttons
+      document.getElementById("cpuRunPauseBtn").addEventListener("click", (e) => {
+        cpuPaused = !cpuPaused;
+        e.target.textContent = cpuPaused ? "Resume CPU" : "Pause CPU";
+        updateDebuggerUI();
+      });
+
+      document.getElementById("cpuStepBtn").addEventListener("click", () => {
+        cpuPaused = true;
+        document.getElementById("cpuRunPauseBtn").textContent = "Resume CPU";
+        cpu.step();
+        updateDebuggerUI();
+      });
+
+      document.getElementById("cpuNmiBtn").addEventListener("click", () => {
+        cpu.nmi();
+        updateDebuggerUI();
+        showToast("Triggered 6502 NMI vector ($FFFA)");
+      });
+
+      // 6502 Mini-Assembler Actions
+      function assembleAndLoad(src, origin, autoRun) {
+        try {
+          const segs = assemble6502(src, origin);
+          let totalBytes = 0;
+          for (const seg of segs) {
+            for (let i = 0; i < seg.bytes.length; i++) {
+              hw.write((seg.addr + i) & 0xFFFF, seg.bytes[i]);
+              totalBytes++;
+            }
+          }
+          // Store entry point in $000B/$000C (USR vector) and $00FB/$00FC (Monitor pointer)
+          hw.write(0x000B, origin & 0xFF);
+          hw.write(0x000C, (origin >> 8) & 0xFF);
+          hw.write(0x00FB, origin & 0xFF);
+          hw.write(0x00FC, (origin >> 8) & 0xFF);
+
+          if (autoRun) {
+            basic.active = false;
+            basic.running = false;
+            cpuPaused = false;
+            document.getElementById("cpuRunPauseBtn").textContent = "Pause CPU";
+            cpu.PC = origin & 0xFFFF;
+          }
+          updateDebuggerUI();
+          updateHexDump();
+          showToast(`Assembled ${totalBytes} bytes at $${origin.toString(16).toUpperCase().padStart(4, "0")}`);
+        } catch (err) {
+          showToast(`Assembler Error: ${err.message}`);
+        }
+      }
+
+      document.getElementById("assembleLoadBtn").addEventListener("click", () => {
+        const origin = parseInt(document.getElementById("asmOrigin").value, 16) || 0x0200;
+        assembleAndLoad(document.getElementById("asmEditor").value, origin, false);
+      });
+
+      document.getElementById("assembleRunBtn").addEventListener("click", () => {
+        const origin = parseInt(document.getElementById("asmOrigin").value, 16) || 0x0200;
+        assembleAndLoad(document.getElementById("asmEditor").value, origin, true);
+      });
+
+      // Hex Dump & POKE Controls
+      function updateHexDump() {
+        const hex2 = v => v.toString(16).toUpperCase().padStart(2, "0");
+        const hex4 = v => v.toString(16).toUpperCase().padStart(4, "0");
+        const lines = [];
+        for (let row = 0; row < 16; row++) {
+          const base = (memDumpStart + row * 8) & 0xFFFF;
+          const bytes = [];
+          let ascii = "";
+          for (let col = 0; col < 8; col++) {
+            const b = hw.read((base + col) & 0xFFFF);
+            bytes.push(hex2(b));
+            ascii += (b >= 0x20 && b <= 0x7E) ? String.fromCharCode(b) : ".";
+          }
+          lines.push(`${hex4(base)}: ${bytes.join(" ")}  |${ascii}|`);
+        }
+        document.getElementById("hexDumpView").textContent = lines.join("\n");
+      }
+
+      document.getElementById("memGoBtn").addEventListener("click", () => {
+        const val = parseInt(document.getElementById("memAddrInput").value, 16);
+        if (!isNaN(val)) {
+          memDumpStart = val & 0xFFF8;
+          updateHexDump();
+        }
+      });
+
+      document.querySelectorAll(".mem-jump").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const addr = parseInt(btn.getAttribute("data-memjump"), 16);
+          memDumpStart = addr;
+          document.getElementById("memAddrInput").value = addr.toString(16).toUpperCase().padStart(4, "0");
+          updateHexDump();
+        });
+      });
+
+      document.getElementById("pokeWriteBtn").addEventListener("click", () => {
+        const addr = parseInt(document.getElementById("pokeAddrInput").value, 16);
+        const val = parseInt(document.getElementById("pokeValInput").value, 16);
+        if (!isNaN(addr) && !isNaN(val)) {
+          hw.write(addr & 0xFFFF, val & 0xFF);
+          updateHexDump();
+          showToast(`Wrote $${(val & 0xFF).toString(16).toUpperCase().padStart(2, "0")} to $${(addr & 0xFFFF).toString(16).toUpperCase().padStart(4, "0")}`);
+        }
+      });
+
+      // Cassette Tape BASIC Loader / Exporter
+      function loadBasicFromText(text, autoRun) {
+        if (!basic.active) {
+          basic.enterWarm();
+        }
+        basic.running = false;
+        basic.program.clear();
+        const lines = text.split(/\r?\n/);
+        for (const raw of lines) {
+          const m = raw.trim().match(/^(\d+)\s+(.+)$/);
+          if (m) {
+            basic.program.set(parseInt(m[1], 10), m[2]);
+          }
+        }
+        basic.serializeProgramToRam();
+        basic.println("LOADED");
+        if (autoRun) {
+          basic.startRun();
+        } else {
+          basic.println("OK");
+        }
+      }
+
+      document.getElementById("tapeLoadBtn").addEventListener("click", () => {
+        loadBasicFromText(document.getElementById("tapeEditor").value, false);
+        showToast("BASIC program loaded into RAM ($0300+)");
+      });
+
+      document.getElementById("tapeLoadRunBtn").addEventListener("click", () => {
+        loadBasicFromText(document.getElementById("tapeEditor").value, true);
+        showToast("BASIC program loaded and running!");
+      });
+
+      document.getElementById("tapeExportBtn").addEventListener("click", () => {
+        basic.serializeProgramToRam();
+        const out = basic.sortedLines.map(ln => `${ln} ${basic.program.get(ln)}`).join("\n");
+        document.getElementById("tapeEditor").value = out;
+        showToast(`Exported ${basic.sortedLines.length} BASIC lines to Cassette buffer`);
+      });
+
+      document.getElementById("tapeFileInput").addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          document.getElementById("tapeEditor").value = String(reader.result || "");
+          showToast(`Loaded "${file.name}" into Tape buffer`);
+        };
+        reader.readAsText(file);
+      });
+
+      document.getElementById("binFileInput").addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const baseAddr = parseInt(document.getElementById("binAddrInput").value, 16) || 0x0200;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const bytes = new Uint8Array(reader.result);
+          for (let i = 0; i < bytes.length; i++) {
+            hw.mem[(baseAddr + i) & 0xFFFF] = bytes[i];
+          }
+          hw.videoDirty = true;
+          updateHexDump();
+          showToast(`Loaded ${bytes.length} binary bytes at $${baseAddr.toString(16).toUpperCase().padStart(4, "0")}`);
+        };
+        reader.readAsArrayBuffer(file);
+      });
+
+      // Update CPU Registers, Flags & Disassembly UI
+      function updateDebuggerUI() {
+        const hex2 = v => "$" + v.toString(16).toUpperCase().padStart(2, "0");
+        const hex4 = v => "$" + v.toString(16).toUpperCase().padStart(4, "0");
+
+        document.getElementById("regPC").textContent = hex4(cpu.PC);
+        document.getElementById("regA").textContent = hex2(cpu.A);
+        document.getElementById("regX").textContent = hex2(cpu.X);
+        document.getElementById("regY").textContent = hex2(cpu.Y);
+        document.getElementById("regSP").textContent = hex2(cpu.SP);
+        document.getElementById("cycleCounter").textContent = cpu.cycles.toLocaleString();
+
+        const flagNames = ["N", "V", "-", "B", "D", "I", "Z", "C"];
+        const flagHtml = flagNames.map((fn, idx) => {
+          const bit = 0x80 >> idx;
+          const set = (cpu.P & bit) !== 0;
+          return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${
+            set ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/50" : "bg-gray-900 text-gray-600 border border-gray-800"
+          }">${fn}</span>`;
+        }).join("");
+        document.getElementById("regFlags").innerHTML = flagHtml;
+
+        // Disassemble next 5 instructions from PC
+        const disLines = [];
+        let addr = cpu.PC;
+        for (let i = 0; i < 5; i++) {
+          const d = cpu.disassembleAt(addr);
+          disLines.push((i === 0 ? "▶ " : "  ") + d.text);
+          addr = d.next;
+        }
+        document.getElementById("disasmView").textContent = disLines.join("\n");
+
+        // Update Mode Badge & $DF00 Matrix Status
+        const modeInd = document.getElementById("modeIndicator");
+        if (basic.active) {
+          modeInd.textContent = basic.running ? "MODE: 8K BASIC (RUNNING)" : "MODE: 8K BASIC (READY)";
+          modeInd.className = "text-emerald-400 font-semibold";
+        } else if (cpu.PC >= 0xF800) {
+          modeInd.textContent = "MODE: SYN600 MONITOR ROM";
+          modeInd.className = "text-amber-300 font-semibold";
+        } else {
+          modeInd.textContent = "MODE: 6502 USER CODE";
+          modeInd.className = "text-sky-300 font-semibold";
+        }
+
+        const dfRead = hw.read(0xDF00);
+        document.getElementById("df00DebugText").textContent =
+          `LATCH: $${hw.kbRowLatch.toString(16).toUpperCase().padStart(2, "0")} • READ: $${dfRead.toString(16).toUpperCase().padStart(2, "0")}`;
+      }
+
+      // Main 60 FPS Emulation & Rendering Loop (~16,667 6502 cycles per frame @ 1 MHz)
+      const CYCLES_PER_FRAME = 16667;
+      function mainLoop() {
+        frameCount++;
+        hw.pumpMailbox();
+
+        if (!cpuPaused) {
+          if (basic.active) {
+            basic.tick(500);
+            cpu.cycles += CYCLES_PER_FRAME;
+          } else {
+            let cyc = 0;
+            while (cyc < CYCLES_PER_FRAME && !basic.active) {
+              cyc += cpu.step();
+            }
+          }
+        }
+
+        renderCRT();
+
+        if (frameCount % 6 === 0) {
+          updateDebuggerUI();
+          if (!document.getElementById("tab-memory").classList.contains("hidden")) {
+            updateHexDump();
+          }
+        }
+
+        requestAnimationFrame(mainLoop);
+      }
+
+      // Focus screen on click so physical keyboard typing works immediately
+      crtScreenWrap.addEventListener("click", () => crtScreenWrap.focus());
+      crtScreenWrap.focus();
+
+      updateDebuggerUI();
+      requestAnimationFrame(mainLoop);
+    };
+  </script>
+</body>
+</html>
